@@ -1,36 +1,53 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Patricia: Legal Intelligence and Case Law Audio Platform
 
-## Getting Started
+Patricia is a specialized platform designed for legal professionals and law students in the East African region. The system leverages artificial intelligence to transform complex case law into high-fidelity audio and concise, actionable summaries. It provides a modern, high-performance interface to streamline the consumption of legal precedents and citations.
 
-First, run the development server:
+## Core Objective
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+The primary objective of Patricia is to bridge the gap between dense legal documentation and efficient professional research. By providing broadcast-quality narration and AI-driven summarization, the platform allows users to digest legal material during commutes or between court sessions, significantly increasing productivity and information retention.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Platform Architecture
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Frontend Stack
+- Framework: Next.js (React) using the App Router architecture.
+- Styling: Tailwind CSS for a utility-first, responsive design system.
+- Component Primitives: Radix UI and shadcn/ui for accessible and consistent interface elements.
+- Aesthetics: A refined "Bento-box" layout designed to reduce cognitive load and organize complex legal data into intuitive, modular segments.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Infrastructure and Backend
+- Identity and Persistence: Supabase is utilized for authentication (JWT-based), PostgreSQL database management, and Row Level Security (RLS).
+- Storage: Supabase Storage handles the persistent hosting of high-quality MP3 assets.
+- Deployment: The frontend is hosted on Vercel, optimized for edge delivery and global performance.
 
-## Learn More
+### AI and Media Pipeline
+- Summarization Engine: OpenAI GPT-4o models are employed to extract key facts, legal issues, and final rulings with high fidelity.
+- Audio Synthesis: OpenAI TTS-1-HD provides human-quality narration for case judgements.
+- Document Ingestion: OpenAI Vision and Google Cloud Vision are used for Optical Character Recognition (OCR) to process physical documents and PDF uploads.
 
-To learn more about Next.js, take a look at the following resources:
+## Key Functional Components
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Automated Summarization: Rapid generation of executive summaries for extensive case files.
+2. High-Quality Narration: Instant playback of case law judgements in a professional audio format.
+3. Omni-Channel Ingestion: Supports ingestion of cases via URL, PDF, Word documents, and images.
+4. Offline Support: Built with a focus on progressive web application (PWA) capabilities for offline access.
+5. Search and Retrieval: A universal legal search interface for querying case names, citations, and specific topics.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Technical Implementation Details
 
-## Deploy on Vercel
+The application is structured around a three-pane layout:
+- Navigation: A fixed sidebar for primary application state.
+- Workspace: A fluid center canvas for content interaction and search.
+- Context: A right sidebar for bookmarks, recent history, and related precedents.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Processing of heavy media and AI tasks is offloaded to dedicated workers to ensure the frontend remains responsive and fluid under high concurrent load.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Development and Deployment
+
+### Getting Started
+1. Clone the repository.
+2. Install dependencies: `npm install`.
+3. Configure environment variables for Supabase and OpenAI.
+4. Run development server: `npm run dev`.
+
+### Deployment Pipeline
+The project follows a standard CI/CD workflow with Vercel integration, ensuring that all changes pushed to the main branch are automatically built and deployed to the production environment.
