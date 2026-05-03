@@ -3,22 +3,54 @@
 import {
   Search,
   Book,
-  FileText,
   Sparkles,
-  Plus,
   Settings,
   LayoutDashboard,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+
+type PatriciaCase = {
+  id: string;
+  title: string;
+  citation?: string;
+  createdAt?: string;
+};
+
+const CASES_KEY = "patricia:cases";
+
+function readStoredCases(): PatriciaCase[] {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const raw = window.localStorage.getItem(CASES_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 export function Sidebar() {
   const pathname = usePathname();
+  const [recentCases, setRecentCases] = useState<PatriciaCase[]>([]);
+
+  useEffect(() => {
+    const syncCases = () => setRecentCases(readStoredCases().slice(0, 8));
+    syncCases();
+    window.addEventListener("patricia:cases-updated", syncCases);
+    window.addEventListener("storage", syncCases);
+    return () => {
+      window.removeEventListener("patricia:cases-updated", syncCases);
+      window.removeEventListener("storage", syncCases);
+    };
+  }, []);
 
   return (
     <aside className="w-[260px] flex-shrink-0 flex flex-col justify-between py-6 px-4 bg-white border-r border-slate-100 shadow-sm z-10 m-2 rounded-3xl h-[calc(100vh-16px)]">
       <div>
-        {/* Logo */}
         <Link href="/" className="flex items-center gap-2 px-2 mb-8 cursor-pointer hover:opacity-80 transition-opacity">
           <div className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-white">
             <Sparkles size={16} className="text-white" />
@@ -30,13 +62,17 @@ export function Sidebar() {
           </div>
         </Link>
 
-        {/* Search Nav */}
         <div className="relative mb-6">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
           <input
             type="text"
-            placeholder="Search Patricia..."
+            placeholder="Search your saved cases..."
             className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 pl-9 pr-4 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+            onChange={(event) => {
+              window.dispatchEvent(
+                new CustomEvent("patricia:search", { detail: event.target.value })
+              );
+            }}
           />
           <div className="absolute right-3 top-2.5 flex items-center gap-1 text-[10px] text-slate-400 font-mono">
             <span className="border border-slate-200 rounded px-1 min-w-[16px] text-center">⌘</span>
@@ -44,23 +80,25 @@ export function Sidebar() {
           </div>
         </div>
 
-        {/* Main Navigation */}
         <nav className="space-y-1 mb-8">
           <NavItem href="/" icon={<LayoutDashboard size={18} />} label="Dashboard" active={pathname === "/"} />
           <NavItem href="/library" icon={<Book size={18} />} label="Library" active={pathname === "/library"} />
         </nav>
 
-        {/* Recent Chats (Like ChatGPT) */}
         <div className="flex-1 overflow-y-auto min-h-[150px] -mx-2 px-2">
           <div className="flex items-center justify-between mb-2 px-2">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Recent Chats</h3>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Recent Cases</h3>
           </div>
           <div className="space-y-0.5">
-            <ChatLink title="Independent Electoral Commission v Maina Kiai" active={pathname === "/chat/1"} />
-            <ChatLink title="Building Bridges Initiative (BBI)" />
-            <ChatLink title="Okiya Omtatah vs Attorney General" />
-            <ChatLink title="Republic vs. Wafula Buke" />
-            <ChatLink title="Murzat Ali vs Republic" />
+            {recentCases.length > 0 ? (
+              recentCases.map((item) => (
+                <ChatLink key={item.id} id={item.id} title={item.title} active={pathname === `/chat/${item.id}`} />
+              ))
+            ) : (
+              <p className="px-3 py-2 text-[12px] leading-relaxed text-slate-400">
+                No saved cases yet. Upload or paste a judgment to create Patricia&apos;s first real case record.
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -70,7 +108,6 @@ export function Sidebar() {
           <NavItem href="/settings" icon={<Settings size={18} />} label="Settings" active={pathname === "/settings"} />
         </nav>
 
-        {/* Profile */}
         <Link href="/login" className="flex items-center gap-3 px-2 py-2 cursor-pointer hover:bg-red-50 group rounded-xl transition-colors active:scale-95">
           <div className="w-9 h-9 bg-blue-100 text-blue-700 group-hover:bg-red-100 group-hover:text-red-700 rounded-full flex items-center justify-center font-bold text-sm transition-colors">
             IC
@@ -90,8 +127,8 @@ function NavItem({ href, icon, label, active, badge, action }: any) {
     <Link
       href={href}
       className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all active:scale-[0.98] ${
-        active 
-          ? "bg-slate-100 text-slate-900 shadow-sm" 
+        active
+          ? "bg-slate-100 text-slate-900 shadow-sm"
           : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
       }`}
     >
@@ -117,13 +154,13 @@ function NavItem({ href, icon, label, active, badge, action }: any) {
   );
 }
 
-function ChatLink({ title, active }: { title: string; active?: boolean }) {
+function ChatLink({ id, title, active }: { id: string; title: string; active?: boolean }) {
   return (
     <Link
-      href="/chat/1" // mockup link
+      href={`/chat/${id}`}
       className={`block px-3 py-2 rounded-xl text-[13px] font-medium transition-all truncate active:scale-[0.98] ${
-        active 
-          ? "bg-slate-100 text-slate-900 shadow-sm" 
+        active
+          ? "bg-slate-100 text-slate-900 shadow-sm"
           : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
       }`}
     >
