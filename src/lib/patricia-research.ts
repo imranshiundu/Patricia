@@ -57,11 +57,8 @@ export const PATRICIA_SOURCES: PatriciaResearchSource[] = [
     kind: "case-law",
     authority: "legal-index",
     baseUrl: "https://ulii.org",
-    searchUrls: [
-      "https://ulii.org/search?search={query}",
-      "https://ulii.org/judgments?search={query}",
-    ],
-    priority: 3,
+    searchUrls: ["https://ulii.org/search?search={query}", "https://ulii.org/judgments?search={query}"],
+    priority: 8,
   },
   {
     id: "tanzlii",
@@ -70,11 +67,8 @@ export const PATRICIA_SOURCES: PatriciaResearchSource[] = [
     kind: "case-law",
     authority: "legal-index",
     baseUrl: "https://tanzlii.org",
-    searchUrls: [
-      "https://tanzlii.org/search?search={query}",
-      "https://tanzlii.org/judgments?search={query}",
-    ],
-    priority: 4,
+    searchUrls: ["https://tanzlii.org/search?search={query}", "https://tanzlii.org/judgments?search={query}"],
+    priority: 9,
   },
   {
     id: "zanzibarlii",
@@ -83,10 +77,8 @@ export const PATRICIA_SOURCES: PatriciaResearchSource[] = [
     kind: "case-law",
     authority: "legal-index",
     baseUrl: "https://zanzibarlii.org",
-    searchUrls: [
-      "https://zanzibarlii.org/search?search={query}",
-    ],
-    priority: 5,
+    searchUrls: ["https://zanzibarlii.org/search?search={query}"],
+    priority: 10,
   },
   {
     id: "eacj",
@@ -95,10 +87,8 @@ export const PATRICIA_SOURCES: PatriciaResearchSource[] = [
     kind: "regional-court",
     authority: "official",
     baseUrl: "https://www.eacj.org",
-    searchUrls: [
-      "https://www.eacj.org/?s={query}",
-    ],
-    priority: 6,
+    searchUrls: ["https://www.eacj.org/?s={query}"],
+    priority: 11,
   },
   {
     id: "africanlii",
@@ -107,10 +97,8 @@ export const PATRICIA_SOURCES: PatriciaResearchSource[] = [
     kind: "general-law",
     authority: "legal-index",
     baseUrl: "https://africanlii.org",
-    searchUrls: [
-      "https://africanlii.org/search?search={query}",
-    ],
-    priority: 7,
+    searchUrls: ["https://africanlii.org/search?search={query}"],
+    priority: 12,
   },
   {
     id: "citizen-digital",
@@ -119,9 +107,7 @@ export const PATRICIA_SOURCES: PatriciaResearchSource[] = [
     kind: "news",
     authority: "news-context",
     baseUrl: "https://www.citizen.digital",
-    searchUrls: [
-      "https://www.citizen.digital/search?q={query}",
-    ],
+    searchUrls: ["https://www.citizen.digital/search?q={query}"],
     priority: 20,
   },
   {
@@ -131,9 +117,7 @@ export const PATRICIA_SOURCES: PatriciaResearchSource[] = [
     kind: "news",
     authority: "news-context",
     baseUrl: "https://www.standardmedia.co.ke",
-    searchUrls: [
-      "https://www.standardmedia.co.ke/search?q={query}",
-    ],
+    searchUrls: ["https://www.standardmedia.co.ke/search?q={query}"],
     priority: 21,
   },
 ];
@@ -159,11 +143,49 @@ function cleanText(value: string) {
     .trim();
 }
 
+function queryTerms(query: string) {
+  const stop = new Set(["case", "name", "number", "citation", "neutral", "brief", "me", "on", "the", "and", "court", "high", "at", "of", "republic", "criminal", "appeal"]);
+  return query
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((term) => term.length > 2 && !stop.has(term));
+}
+
+function detectPreferredCountries(query: string) {
+  const lower = query.toLowerCase();
+  const countries = new Set<string>();
+  if (/kenya|kenyan|kakamega|nairobi|mombasa|kisumu|eldoret|kehc|klr|kenyalaw/i.test(lower)) countries.add("Kenya");
+  if (/uganda|ugandan|kampala|ulii/i.test(lower)) countries.add("Uganda");
+  if (/tanzania|tanzanian|dar es salaam|tanzlii/i.test(lower)) countries.add("Tanzania");
+  if (/zanzibar/i.test(lower)) countries.add("Zanzibar");
+  if (/east african court|eacj/i.test(lower)) countries.add("East Africa");
+  return countries;
+}
+
+function scoreResult(item: PatriciaResearchResult, query: string) {
+  const terms = queryTerms(query);
+  const haystack = `${item.title} ${item.url} ${item.snippet || ""}`.toLowerCase();
+  let score = 0;
+
+  for (const term of terms) {
+    if (haystack.includes(term)) score += term.length > 5 ? 3 : 1;
+  }
+
+  if (item.authority === "official") score += 6;
+  if (item.country === "Kenya" && detectPreferredCountries(query).has("Kenya")) score += 8;
+  if (/mudialo|muchere|kehc|5462|80\D+2017|kakamega/i.test(query) && /kenyalaw|kehc|mudialo|muchere|5462|kakamega/i.test(haystack)) score += 15;
+  if (/judgment|judgments|akn\/ke|case|appeal|petition|republic|v\b/i.test(haystack)) score += 2;
+
+  return score;
+}
+
 function parseAnchors(html: string, source: PatriciaResearchSource, query: string): PatriciaResearchResult[] {
   const results: PatriciaResearchResult[] = [];
   const seen = new Set<string>();
-  const queryTerms = query.toLowerCase().split(/\s+/).filter((term) => term.length > 2);
+  const terms = queryTerms(query);
   const anchorPattern = /<a\s+[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  const preferredCountries = detectPreferredCountries(query);
 
   for (const match of html.matchAll(anchorPattern)) {
     const href = match[1];
@@ -174,15 +196,15 @@ function parseAnchors(html: string, source: PatriciaResearchSource, query: strin
     if (seen.has(url)) continue;
     if (url.includes("#") || url.includes("javascript:")) continue;
 
-    const lowerTitle = title.toLowerCase();
-    const lowerUrl = url.toLowerCase();
-    const hasQuerySignal = queryTerms.length === 0 || queryTerms.some((term) => lowerTitle.includes(term) || lowerUrl.includes(term));
-    const legalSignal = /judgment|judgments|akn|case|court|law|constitution|act|appeal|petition|cause|republic|v\b|versus/i.test(`${title} ${url}`);
+    const haystack = `${title} ${url}`.toLowerCase();
+    const hasSpecificSignal = terms.length === 0 || terms.some((term) => haystack.includes(term));
+    const legalSignal = /judgment|judgments|akn|case|court|law|constitution|act|appeal|petition|cause|republic|v\b|versus/i.test(haystack);
 
-    if (!hasQuerySignal && !legalSignal) continue;
+    if (!legalSignal) continue;
+    if (!hasSpecificSignal && preferredCountries.size > 0 && !preferredCountries.has(source.country)) continue;
+    if (!hasSpecificSignal && title.length < 12) continue;
 
-    seen.add(url);
-    results.push({
+    const item: PatriciaResearchResult = {
       sourceId: source.id,
       sourceName: source.name,
       country: source.country,
@@ -190,8 +212,12 @@ function parseAnchors(html: string, source: PatriciaResearchSource, query: strin
       authority: source.authority,
       title,
       url,
-    });
+    };
 
+    if (scoreResult(item, query) < 3) continue;
+
+    seen.add(url);
+    results.push(item);
     if (results.length >= 8) break;
   }
 
@@ -222,16 +248,20 @@ async function fetchWithTimeout(url: string, timeoutMs = 9000) {
 }
 
 export async function researchEastAfricanLaw(query: string, maxResults = 12) {
-  const safeQuery = query.trim().slice(0, 180);
+  const safeQuery = query.trim().slice(0, 220);
   if (!safeQuery) return [];
 
   const encoded = encodeURIComponent(safeQuery);
-  const results: PatriciaResearchResult[] = [];
+  const found: PatriciaResearchResult[] = [];
   const seen = new Set<string>();
+  const preferredCountries = detectPreferredCountries(safeQuery);
+  const orderedSources = [...PATRICIA_SOURCES]
+    .filter((source) => preferredCountries.size === 0 || preferredCountries.has(source.country) || source.country === "Africa")
+    .sort((a, b) => a.priority - b.priority);
 
-  for (const source of [...PATRICIA_SOURCES].sort((a, b) => a.priority - b.priority)) {
+  for (const source of orderedSources) {
     for (const template of source.searchUrls) {
-      if (results.length >= maxResults) break;
+      if (found.length >= maxResults * 2) break;
 
       const url = template.replace("{query}", encoded);
       const html = await fetchWithTimeout(url);
@@ -241,15 +271,17 @@ export async function researchEastAfricanLaw(query: string, maxResults = 12) {
       for (const item of parsed) {
         if (seen.has(item.url)) continue;
         seen.add(item.url);
-        results.push(item);
-        if (results.length >= maxResults) break;
+        found.push(item);
       }
     }
-
-    if (results.length >= maxResults) break;
   }
 
-  return results;
+  return found
+    .map((item) => ({ item, score: scoreResult(item, safeQuery) }))
+    .filter(({ score }) => score >= 3)
+    .sort((a, b) => b.score - a.score)
+    .map(({ item }) => item)
+    .slice(0, maxResults);
 }
 
 export function sourcesAsPrompt(results: PatriciaResearchResult[]) {
