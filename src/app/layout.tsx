@@ -9,12 +9,8 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "Patricia | Case Law Intelligence",
-  description: "AI-powered legal tech platform for East African case laws.",
+  description: "AI-powered legal assistant for reading, questioning, and listening to case law.",
 };
-
-import { Sidebar } from "@/components/Sidebar";
-import { RightSidebar } from "@/components/RightSidebar";
-import { Header } from "@/components/Header";
 
 export default function RootLayout({
   children,
