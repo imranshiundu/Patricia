@@ -13,7 +13,7 @@ export default function AppLayout({
       <Sidebar />
       <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden px-6 pb-4 pt-[92px]">
         <Header />
-        <section className="min-h-0 flex-1 overflow-hidden rounded-[2rem] border border-slate-100 bg-white/45 shadow-sm">
+        <section className="min-h-0 flex-1 overflow-y-auto rounded-[2rem] border border-slate-100 bg-white shadow-sm">
           {children}
         </section>
       </main>
