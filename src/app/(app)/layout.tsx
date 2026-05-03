@@ -1,5 +1,6 @@
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
+import { PatriciaClientBoot } from "@/components/PatriciaClientBoot";
 
 export default function AppLayout({
   children,
@@ -8,8 +9,9 @@ export default function AppLayout({
 }>) {
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden text-slate-900 font-sans relative">
+      <PatriciaClientBoot />
       <Sidebar />
-      <main className="flex-1 flex flex-col relative px-8 py-4 pt-[76px] overflow-y-auto pb-40">
+      <main className="flex-1 flex flex-col relative px-8 py-4 pt-[76px] overflow-hidden">
         <Header />
         {children}
       </main>
