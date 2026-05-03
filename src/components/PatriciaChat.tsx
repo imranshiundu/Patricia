@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp, FileText, Loader2, MessageSquare, Paperclip, Sparkles } from "lucide-react";
+import { ArrowUp, FileText, Loader2, MessageSquare, Paperclip, Sparkles, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { getPatriciaCases, PatriciaCaseRecord } from "@/lib/patricia-storage";
@@ -13,6 +13,7 @@ type ChatMessage = {
 };
 
 const CHAT_KEY = "patricia:chat";
+const MAX_CONTEXT_CHARS = 60_000;
 
 function makeId(prefix = "msg") {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -77,6 +78,11 @@ export function PatriciaChat() {
     [cases, selectedCaseId]
   );
 
+  const selectedCaseText = useMemo(() => {
+    const text = selectedCase?.fullText || selectedCase?.textPreview || "";
+    return text.slice(0, MAX_CONTEXT_CHARS);
+  }, [selectedCase]);
+
   async function submitMessage(event?: FormEvent) {
     event?.preventDefault();
     const question = input.trim();
@@ -101,7 +107,9 @@ export function PatriciaChat() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           question,
-          caseText: selectedCase?.textPreview || "",
+          caseText: selectedCaseText,
+          caseTitle: selectedCase?.title || "",
+          citation: selectedCase?.citation || "",
         }),
       });
 
@@ -140,6 +148,14 @@ export function PatriciaChat() {
     setInput(prompt);
   }
 
+  function clearChat() {
+    setMessages([]);
+    setError("");
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(CHAT_KEY);
+    }
+  }
+
   return (
     <div className="flex h-full min-h-[calc(100vh-180px)] flex-col">
       <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 pb-36 pt-4">
@@ -152,7 +168,7 @@ export function PatriciaChat() {
               Chat with Patricia
             </h1>
             <p className="mx-auto mb-8 max-w-2xl text-slate-500">
-              Ask a normal question. Patricia will answer directly, and when you save real case text, she can use that case as context.
+              Ask a normal question. Patricia can chat generally, and when you save real case text, she can use that selected case as context.
             </p>
 
             <div className="grid w-full max-w-[680px] grid-cols-1 gap-3 sm:grid-cols-2">
@@ -164,6 +180,15 @@ export function PatriciaChat() {
           </div>
         ) : (
           <div className="space-y-5 py-4">
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={clearChat}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+              >
+                <Trash2 size={13} /> Clear chat
+              </button>
+            </div>
             {messages.map((message) => (
               <MessageBubble key={message.id} message={message} />
             ))}
@@ -199,6 +224,11 @@ export function PatriciaChat() {
               </select>
             ) : (
               <span className="text-slate-400">general chat; no saved case selected</span>
+            )}
+            {selectedCaseText && (
+              <span className="ml-auto hidden text-slate-400 sm:inline">
+                {selectedCaseText.length.toLocaleString()} chars ready
+              </span>
             )}
           </div>
 
