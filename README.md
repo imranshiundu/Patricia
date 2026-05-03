@@ -1,6 +1,6 @@
 # Patricia
 
-Patricia is a browser-first legal assistant for reading, questioning, researching, summarising, and listening to case law. The product is designed for a hosted Vercel deployment without a permanent backend database. It should not pretend to have cases, users, paid plans, or stored audio that do not exist. User-created case records and generated audio are stored in the browser using `localStorage`, in-memory state, and object URLs until a real storage backend is added.
+Patricia is a browser-first legal assistant for reading, questioning, researching, summarising, and listening to case law. The product is designed for a hosted Vercel deployment without a permanent backend database. It should not pretend to have cases, users, paid plans, or stored audio that do not exist.
 
 Patricia's job is simple: take real legal text from the user, help the user understand it, fetch legal research leads from trusted East African sources, and turn useful parts into listenable audio without overwhelming free AI limits.
 
@@ -10,8 +10,9 @@ Patricia's job is simple: take real legal text from the user, help the user unde
 - Hosting target: Vercel.
 - AI provider: Groq through a server-side API route.
 - Legal research: server-side source connectors for East African public legal sources.
-- Client persistence: browser `localStorage` for case metadata, chat history, queue jobs, and audio queue records.
+- Client persistence: browser `localStorage` for case metadata, chat sessions, queue jobs, retention records, and audio queue metadata.
 - Runtime audio: browser `HTMLAudioElement` playback from generated or imported audio URLs.
+- Cleanup policy: temporary import/audio records are expired after 24 hours unless the user exports or saves them.
 - No Supabase, no database, no permanent file server, no fake case library.
 
 ## Environment variables
@@ -23,7 +24,36 @@ GROQ_API_KEY=your_groq_key_here
 GROQ_MODEL=llama-3.1-8b-instant
 ```
 
-The default model is intentionally small. Patricia must work even with lower-intelligence/free-tier models, so prompts and workflows should reduce each task into small, clear steps instead of sending massive judgments in one request.
+The default model is intentionally small. Patricia must work even with lower-intelligence/free-tier models, so prompts and workflows reduce each task into small, clear steps instead of sending massive judgments in one request.
+
+## Professional answer protocol
+
+Patricia must not answer like a generic chatbot. For legal lookup/research questions, the API forces this structure:
+
+```text
+## Answer
+Direct, useful answer without pretending uncertain material is verified.
+
+## What is verified
+Only facts supported by local text or strong source titles/URLs.
+
+## Research leads
+Source leads with authority labels: official, legal-index, or news-context.
+
+## What still needs checking
+Missing original judgments, PDFs, statutes, dates, parties, or holdings.
+
+## Next step
+Ask whether the user wants deeper import/research, a brief, or audio.
+```
+
+Forbidden answer behavior:
+
+- no invented cases, citations, parties, statutes, holdings, courts, or dates;
+- no vague claims like “I found the case” unless a source actually supports it;
+- no treating news as law;
+- no saying “I will try to search” inside the final answer;
+- no hiding weak evidence.
 
 ## What Patricia should do
 
@@ -34,7 +64,7 @@ Patricia should accept real legal material from the user:
 - pasted judgment text;
 - uploaded PDF or text file;
 - legal research links from trusted public sources;
-- imported case text from a trusted legal source when deeper import is added.
+- imported case text from a trusted legal source.
 
 The app should not show hard-coded recent cases as if the user created them. Empty states are better than fake data.
 
@@ -49,9 +79,19 @@ Patricia should answer as a careful legal research assistant:
 - say when the provided text or search result is insufficient;
 - never invent citations, statutes, holdings, or case names.
 
-### 3. East African legal research
+### 3. Saved local chats
 
-Patricia now has a research layer. It does not claim to have a full legal database in memory. It fetches live source leads and passes those leads to Groq for careful explanation.
+Patricia now stores multiple chat sessions in the browser:
+
+- users can start a new chat;
+- users can switch previous chats from the sidebar;
+- chat history remains until the user deletes it or clears browser data/cache;
+- session titles are generated from the first question;
+- chats are local to that browser/device.
+
+### 4. East African legal research
+
+Patricia does not claim to have a full legal database in memory. It fetches live source leads and passes those leads to Groq for careful explanation.
 
 Initial source registry:
 
@@ -64,9 +104,15 @@ Initial source registry:
 - African Legal Information Institute
 - selected news/context sources such as Citizen Digital and The Standard Kenya
 
-Official legal sources must be treated as stronger authority than news. News is only context and should not be cited as the law.
+Source authority order:
 
-### 4. Audio behavior
+1. `official`
+2. `legal-index`
+3. `news-context`
+
+News is only context and should not be cited as the law.
+
+### 5. Audio behavior
 
 Patricia should reuse the voice pattern from the beta portfolio where possible, but the legal audio layer must be chunk-based. Case law audio can easily become one or two hours long, and one long audio job is the wrong architecture for a free Groq/API workflow.
 
@@ -75,9 +121,10 @@ The correct design is:
 1. split the judgment into sections;
 2. summarise or clean each section;
 3. generate audio section by section;
-4. save each audio chunk locally;
+4. save each audio chunk locally or in IndexedDB later;
 5. play the chunks as a queue;
-6. allow resume, skip, and regenerate per section.
+6. allow resume, skip, and regenerate per section;
+7. expire temporary audio after 24 hours unless exported/saved.
 
 A one-hour judgment should become many smaller tracks, not one fragile request.
 
@@ -93,14 +140,6 @@ Large judgments must be processed like a book, not like a chat message.
 - Store intermediate summaries in the browser so failed requests do not destroy progress.
 - Treat every chunk independently, then create a final combined brief from chunk summaries.
 
-### Audio rules
-
-- Do not convert the entire judgment into one audio file.
-- Generate audio chunks of roughly 5-10 minutes each.
-- Store chunk metadata in `localStorage`.
-- Keep the actual audio as a browser object URL or IndexedDB entry until a real backend is added.
-- Show users which chunks are ready, failed, queued, or skipped.
-
 ### When the user uploads many cases
 
 Free APIs cannot safely process everything at once. Patricia should use a queue:
@@ -114,16 +153,20 @@ Free APIs cannot safely process everything at once. Patricia should use a queue:
 
 ## Key files
 
-- `src/app/api/patricia/chat/route.ts` — server-side Groq chat route with legal research leads.
+- `src/app/api/patricia/chat/route.ts` — server-side Groq chat route with professional answer protocol.
 - `src/app/api/patricia/research/route.ts` — research endpoint for East African legal/public sources.
-- `src/lib/patricia-research.ts` — source registry and research fetcher.
+- `src/app/api/patricia/import/route.ts` — trusted source import endpoint.
+- `src/lib/patricia-research.ts` — source registry and authority-ranked research fetcher.
+- `src/lib/patricia-chat-sessions.ts` — local multi-chat session storage.
+- `src/lib/patricia-retention.ts` — 24-hour temporary import/audio cleanup helpers.
 - `src/lib/patricia-storage.ts` — browser persistence helpers for case records and audio chunks.
 - `src/lib/patricia-processing.ts` — chunking, narration-time estimation, and case-title helpers.
 - `src/lib/patricia-queue.ts` — local queue for chunked summaries/audio jobs.
-- `src/components/PatriciaChat.tsx` — normal assistant chat UI.
-- `src/components/ResearchClient.tsx` — legal research search UI.
+- `src/components/PatriciaChat.tsx` — professional chat UI with long-answer layout.
+- `src/components/Sidebar.tsx` — navigation, saved chats, and recent cases.
+- `src/components/ResearchClient.tsx` — legal research search/import UI.
 - `src/components/DocumentIntakeClient.tsx` — real case intake and queue creation.
-- `src/components/LibraryClient.tsx` — saved local case library.
+- `src/components/LibraryClient.tsx` — saved local case library and exports.
 - `src/components/QueuePanel.tsx` — long-case queue visibility.
 - `src/components/AudioPlayer.tsx` — real audio playback component.
 
@@ -155,9 +198,9 @@ Patricia is a legal research assistant, not a lawyer. The interface should alway
 
 ## Next implementation steps
 
-1. Add full HTML/document import for selected legal research results.
-2. Add PDF extraction for uploaded judgments.
+1. Add PDF extraction for uploaded judgments and imported legal PDFs.
+2. Add source-specific parsers for Kenya Law judgments and legislation.
 3. Add text-to-speech integration using the same voice direction as the beta portfolio.
-4. Move audio blob storage from object URLs to IndexedDB for better large-file handling.
-5. Add export options for summaries, legal briefs, source lists, and generated narration scripts.
+4. Move audio blob storage from object URLs/localStorage metadata to IndexedDB.
+5. Add downloadable audio chunks and legal briefs.
 6. Add source verification fields so Patricia can track where each case came from.
