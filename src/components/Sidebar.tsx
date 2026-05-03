@@ -6,6 +6,8 @@ import {
   Sparkles,
   Settings,
   LayoutDashboard,
+  ListChecks,
+  FileText,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -81,8 +83,10 @@ export function Sidebar() {
         </div>
 
         <nav className="space-y-1 mb-8">
-          <NavItem href="/" icon={<LayoutDashboard size={18} />} label="Dashboard" active={pathname === "/"} />
+          <NavItem href="/" icon={<LayoutDashboard size={18} />} label="Chat" active={pathname === "/"} />
+          <NavItem href="/documents" icon={<FileText size={18} />} label="Documents" active={pathname === "/documents"} />
           <NavItem href="/library" icon={<Book size={18} />} label="Library" active={pathname === "/library"} />
+          <NavItem href="/queue" icon={<ListChecks size={18} />} label="Queue" active={pathname === "/queue"} />
         </nav>
 
         <div className="flex-1 overflow-y-auto min-h-[150px] -mx-2 px-2">
@@ -108,13 +112,13 @@ export function Sidebar() {
           <NavItem href="/settings" icon={<Settings size={18} />} label="Settings" active={pathname === "/settings"} />
         </nav>
 
-        <Link href="/login" className="flex items-center gap-3 px-2 py-2 cursor-pointer hover:bg-red-50 group rounded-xl transition-colors active:scale-95">
-          <div className="w-9 h-9 bg-blue-100 text-blue-700 group-hover:bg-red-100 group-hover:text-red-700 rounded-full flex items-center justify-center font-bold text-sm transition-colors">
-            IC
+        <Link href="/documents" className="flex items-center gap-3 px-2 py-2 cursor-pointer hover:bg-slate-50 group rounded-xl transition-colors active:scale-95">
+          <div className="w-9 h-9 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center font-bold text-sm transition-colors">
+            P
           </div>
           <div className="flex flex-col flex-1 truncate">
-            <span className="text-sm font-semibold truncate text-slate-800">Imran C.</span>
-            <span className="text-xs text-slate-500 truncate group-hover:text-red-500 transition-colors">Log out</span>
+            <span className="text-sm font-semibold truncate text-slate-800">Local session</span>
+            <span className="text-xs text-slate-500 truncate">Browser storage only</span>
           </div>
         </Link>
       </div>
@@ -157,7 +161,7 @@ function NavItem({ href, icon, label, active, badge, action }: any) {
 function ChatLink({ id, title, active }: { id: string; title: string; active?: boolean }) {
   return (
     <Link
-      href={`/chat/${id}`}
+      href={`/?case=${id}`}
       className={`block px-3 py-2 rounded-xl text-[13px] font-medium transition-all truncate active:scale-[0.98] ${
         active
           ? "bg-slate-100 text-slate-900 shadow-sm"
