@@ -3,7 +3,8 @@
 import { ArrowUp, FileText, Save } from "lucide-react";
 import { useMemo, useState } from "react";
 import { extractCaseTitle, makeCaseId, splitForGroq } from "@/lib/patricia-processing";
-import { savePatriciaCase } from "@/lib/patricia-storage";
+import { savePatriciaCase, PatriciaCaseRecord } from "@/lib/patricia-storage";
+import { enqueueCaseSummary } from "@/lib/patricia-queue";
 
 export function DocumentIntakeClient() {
   const [caseText, setCaseText] = useState("");
@@ -23,7 +24,7 @@ export function DocumentIntakeClient() {
     }
 
     const now = new Date().toISOString();
-    const saved = savePatriciaCase({
+    const record: PatriciaCaseRecord = {
       id: makeCaseId(),
       title: title.trim() || extractCaseTitle(cleanText),
       citation: citation.trim() || undefined,
@@ -33,14 +34,17 @@ export function DocumentIntakeClient() {
       durationSeconds: estimatedMinutes * 60,
       createdAt: now,
       updatedAt: now,
-    });
+    };
+
+    const saved = savePatriciaCase(record);
 
     if (!saved) {
       setStatus("This browser could not save the case. The text may be too large for localStorage. Try a shorter extract first.");
       return;
     }
 
-    setStatus("Case saved locally. It will now appear in Patricia's sidebar, library, and chat context selector.");
+    const jobs = enqueueCaseSummary(record);
+    setStatus(`Case saved locally and ${jobs.length} summary job${jobs.length === 1 ? "" : "s"} added to the queue.`);
     setCaseText("");
     setTitle("");
     setCitation("");
@@ -61,7 +65,7 @@ export function DocumentIntakeClient() {
           Add a real case
         </h1>
         <p className="mt-2 text-slate-500 max-w-2xl">
-          Paste judgment text or upload a plain text file. Patricia saves the record in this browser only until a server storage layer is added.
+          Paste judgment text or upload a plain text file. Patricia saves the record in this browser and queues it for safe chunk processing.
         </p>
       </div>
 
@@ -101,7 +105,7 @@ export function DocumentIntakeClient() {
               className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800 active:scale-[0.98]"
             >
               <Save size={16} />
-              Save case locally
+              Save and queue case
             </button>
           </div>
 
