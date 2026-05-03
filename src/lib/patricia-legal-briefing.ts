@@ -78,43 +78,21 @@ export function buildExtractionLedger(extraction: PatriciaCaseExtraction | null)
 
   for (const [key, value] of Object.entries(metadata)) {
     if (value) {
-      items.push({
-        claim: `${key.replace(/_/g, " ")}: ${value}`,
-        support: "Extracted from local legal text supplied/imported into Patricia.",
-        source: "local legal text",
-        confidence: "high",
-        kind: "model-extraction",
-      });
+      items.push({ claim: `${key.replace(/_/g, " ")}: ${value}`, support: "Extracted from local legal text supplied/imported into Patricia.", source: "local legal text", confidence: "high", kind: "model-extraction" });
     }
   }
 
-  const sections: Array<[keyof PatriciaCaseExtraction, string]> = [
-    ["procedural_history", "Procedural history"],
-    ["holding", "Holding"],
-  ];
-
+  const sections: Array<[keyof PatriciaCaseExtraction, string]> = [["procedural_history", "Procedural history"], ["holding", "Holding"]];
   for (const [key, label] of sections) {
     const value = extraction[key];
-    if (typeof value === "string" && value.trim()) {
-      items.push({ claim: label, support: value, source: "local legal text", confidence: "high", kind: "model-extraction" });
-    }
+    if (typeof value === "string" && value.trim()) items.push({ claim: label, support: value, source: "local legal text", confidence: "high", kind: "model-extraction" });
   }
 
-  const arraySections: Array<[keyof PatriciaCaseExtraction, string]> = [
-    ["material_facts", "Material fact"],
-    ["issues", "Issue"],
-    ["applicable_law", "Applicable law"],
-    ["reasoning", "Reasoning"],
-    ["orders", "Order"],
-    ["legal_principles", "Legal principle"],
-  ];
-
+  const arraySections: Array<[keyof PatriciaCaseExtraction, string]> = [["material_facts", "Material fact"], ["issues", "Issue"], ["applicable_law", "Applicable law"], ["reasoning", "Reasoning"], ["orders", "Order"], ["legal_principles", "Legal principle"]];
   for (const [key, label] of arraySections) {
     const value = extraction[key];
     if (Array.isArray(value)) {
-      for (const entry of value.filter(Boolean).slice(0, 12)) {
-        items.push({ claim: label, support: String(entry), source: "local legal text", confidence: "high", kind: "model-extraction" });
-      }
+      for (const entry of value.filter(Boolean).slice(0, 12)) items.push({ claim: label, support: String(entry), source: "local legal text", confidence: "high", kind: "model-extraction" });
     }
   }
 
@@ -123,23 +101,13 @@ export function buildExtractionLedger(extraction: PatriciaCaseExtraction | null)
 
 export function evidenceLedgerAsPrompt(items: PatriciaEvidenceItem[]) {
   if (items.length === 0) return "No verified evidence ledger items are available yet.";
-  return items
-    .map((item, index) => `${index + 1}. Claim: ${item.claim}\nSupport: ${item.support}\nSource: ${item.source}\nConfidence: ${item.confidence}\nKind: ${item.kind}`)
-    .join("\n\n");
+  return items.map((item, index) => `${index + 1}. Claim: ${item.claim}\nSupport: ${item.support}\nSource: ${item.source}\nConfidence: ${item.confidence}\nKind: ${item.kind}`).join("\n\n");
 }
 
-export function buildFinalLegalAnswerPrompt(args: {
-  question: string;
-  caseHeader: string;
-  planText: string;
-  sourceQuality: string;
-  extraction: PatriciaCaseExtraction | null;
-  evidenceLedger: string;
-  externalResearch: string;
-}) {
-  return `${args.caseHeader ? `${args.caseHeader}\n\n` : ""}You are Patricia, an East African legal research assistant. Your private research process is complete. Now write the answer the user should see.\n\nUSER QUESTION:\n${args.question}\n\nPRIVATE RESEARCH PLAN:\n${args.planText}\n\nSOURCE QUALITY:\n${args.sourceQuality}\n\nPRIVATE STRUCTURED EXTRACTION:\n${JSON.stringify(args.extraction || {}, null, 2)}\n\nPRIVATE EVIDENCE LEDGER:\n${args.evidenceLedger}\n\nPRIVATE EXTERNAL RESEARCH LEADS:\n${args.externalResearch}\n\nPublic answer rules:\n1. Do not reveal internal labels such as evidence ledger, research plan, extraction worker, source quality, or verifier.\n2. Do not use markdown heading markers like ## or ###.\n3. Do not output a generic template. Write a natural professional answer.\n4. Give verified answers, not fast answers. If the judgment text is missing, say Patricia can identify the case but cannot brief facts/issues/holding without the judgment text or a successful import.\n5. Do not list irrelevant external source leads. Only mention a source if it directly supports the case or law being discussed.\n6. Do not invent facts, statutes, judge names, holdings, reasons, or final orders.\n7. If only case metadata is verified, say exactly that and ask the user to import/paste the judgment for a full brief.\n8. Use plain paragraphs and short labelled lines such as “Case”, “What is verified”, “What is not yet verified”, and “Next step”. Do not use heading symbols.\n9. End with one useful next action, not a menu of many options.`;
+export function buildFinalLegalAnswerPrompt(args: { question: string; caseHeader: string; planText: string; sourceQuality: string; extraction: PatriciaCaseExtraction | null; evidenceLedger: string; externalResearch: string }) {
+  return `${args.caseHeader ? `${args.caseHeader}\n\n` : ""}You are Patricia, an East African legal research assistant. Your private research process is complete. Now write the answer the user should see.\n\nUSER QUESTION:\n${args.question}\n\nPRIVATE RESEARCH PLAN:\n${args.planText}\n\nSOURCE QUALITY:\n${args.sourceQuality}\n\nPRIVATE STRUCTURED EXTRACTION:\n${JSON.stringify(args.extraction || {}, null, 2)}\n\nPRIVATE EVIDENCE LEDGER:\n${args.evidenceLedger}\n\nPRIVATE EXTERNAL RESEARCH LEADS:\n${args.externalResearch}\n\nPublic answer rules:\n1. Do not reveal internal labels such as evidence ledger, research plan, extraction worker, source quality, or verifier.\n2. Do not use markdown heading markers like ## or ###.\n3. Do not output a generic template. Write a natural professional answer.\n4. Give verified answers, not fast answers.\n5. If the judgment text is available in the private extraction, produce a complete case brief with: case, court/date/judge, background, facts, issues, holding, reasoning, orders, and legal significance.\n6. If only case metadata is available, say the full judgment text is needed. Do not say that if the extraction contains facts, issues, holding, reasoning, or orders.\n7. Do not list irrelevant external source leads. Only mention a source if it directly supports the case or law being discussed.\n8. Do not invent facts, statutes, judge names, holdings, reasons, or final orders.\n9. Use simple labelled lines, not markdown headings. Good labels: Case, Court, Background, Facts, Issues, Holding, Reasoning, Orders, Legal significance, Source.\n10. End with one useful next action, not a menu of many options.`;
 }
 
 export function buildVerificationPrompt(draft: string, evidenceLedger: string) {
-  return `You are Patricia's private verification worker. Check the draft against the evidence ledger. Return the corrected public answer only.\n\nPRIVATE EVIDENCE LEDGER:\n${evidenceLedger}\n\nDRAFT ANSWER:\n${draft}\n\nVerification rules:\n- Remove unsupported facts.\n- Remove markdown heading markers such as ## and ###.\n- Remove internal process labels: evidence ledger, extraction worker, research plan, verifier, source quality.\n- Remove irrelevant source lists.\n- Downgrade uncertain claims.\n- Do not add new legal facts.\n- If the available evidence only supports metadata, the final answer must say that a full brief requires the judgment text or direct source import.\n- Keep it professional, simple, and user-facing.`;
+  return `You are Patricia's private verification worker. Check the draft against the evidence ledger. Return the corrected public answer only.\n\nPRIVATE EVIDENCE LEDGER:\n${evidenceLedger}\n\nDRAFT ANSWER:\n${draft}\n\nVerification rules:\n- Remove unsupported facts.\n- Remove markdown heading markers such as ## and ###.\n- Remove internal process labels: evidence ledger, extraction worker, research plan, verifier, source quality.\n- Remove irrelevant source lists.\n- Downgrade uncertain claims.\n- Do not add new legal facts.\n- If the draft says a full brief requires judgment text, keep that only when the evidence ledger lacks facts, issues, holding, reasoning, and orders.\n- Keep it professional, simple, and user-facing.`;
 }
