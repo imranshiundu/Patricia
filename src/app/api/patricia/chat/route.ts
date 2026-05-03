@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
-export const runtime = "edge";
-
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+const MAX_CONTEXT_CHARS = 60_000;
 
 function chunkText(input: string, maxChars = 9000) {
-  const normalized = input.replace(/\s+/g, " ").trim();
+  const normalized = input.replace(/\s+/g, " ").trim().slice(0, MAX_CONTEXT_CHARS);
   const chunks: string[] = [];
 
   for (let index = 0; index < normalized.length; index += maxChars) {
@@ -35,7 +34,7 @@ async function callGroq(messages: Array<{ role: "system" | "user" | "assistant";
       model,
       messages,
       temperature: 0.2,
-      max_tokens: 1200,
+      max_tokens: 1400,
     }),
   });
 
@@ -53,6 +52,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const question = String(body.question || "").trim();
     const caseText = String(body.caseText || "").trim();
+    const caseTitle = String(body.caseTitle || "").trim();
+    const citation = String(body.citation || "").trim();
     const model = String(body.model || process.env.GROQ_MODEL || "llama-3.1-8b-instant");
 
     if (!question) {
@@ -62,23 +63,28 @@ export async function POST(request: NextRequest) {
     const chunks = chunkText(caseText);
     const context = chunks.length > 1
       ? chunks.map((chunk, index) => `[Part ${index + 1}/${chunks.length}] ${chunk}`).join("\n\n")
-      : caseText;
+      : caseText.slice(0, MAX_CONTEXT_CHARS);
+
+    const caseHeader = [
+      caseTitle ? `Title: ${caseTitle}` : "",
+      citation ? `Citation: ${citation}` : "",
+    ].filter(Boolean).join("\n");
 
     return callGroq(
       [
         {
           role: "system",
           content:
-            "You are Patricia, a careful legal research assistant for East African case law. Answer from the provided text when available. Be clear, concise, and never invent citations, holdings, parties, or statutes. If the text is insufficient, say what is missing.",
+            "You are Patricia, a careful legal research assistant for East African case law. Use simple, direct language. Answer from the provided text when available. Never invent citations, holdings, parties, laws, dates, courts, or statutes. If the provided text is missing or insufficient, say that clearly and answer generally only when safe.",
         },
         {
           role: "user",
-          content: `Case text:\n${context || "No case text was provided."}\n\nUser question:\n${question}`,
+          content: `${caseHeader ? `${caseHeader}\n\n` : ""}Case text:\n${context || "No case text was provided."}\n\nUser question:\n${question}`,
         },
       ],
       model
     );
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: "Unable to process Patricia request." }, { status: 500 });
   }
 }
