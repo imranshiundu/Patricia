@@ -1,6 +1,5 @@
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
-import { UpgradeModal } from "@/components/UpgradeModal";
 
 export default function AppLayout({
   children,
@@ -14,7 +13,6 @@ export default function AppLayout({
         <Header />
         {children}
       </main>
-      <UpgradeModal />
     </div>
   );
 }
