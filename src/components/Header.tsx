@@ -1,26 +1,73 @@
 "use client";
 
-import { Lock, FileText } from "lucide-react";
+import { FileText, Lock, Search, Settings } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+const titles: Record<string, { title: string; subtitle: string }> = {
+  "/": {
+    title: "Chat",
+    subtitle: "Ask Patricia using saved cases, imported sources, and live legal research leads.",
+  },
+  "/research": {
+    title: "Research",
+    subtitle: "Search trusted East African legal sources and import readable results.",
+  },
+  "/documents": {
+    title: "Documents",
+    subtitle: "Add real case text from paste or text files into local browser storage.",
+  },
+  "/library": {
+    title: "Library",
+    subtitle: "Review and export real cases saved on this device.",
+  },
+  "/queue": {
+    title: "Queue",
+    subtitle: "Track long-case chunk jobs created from imported or pasted cases.",
+  },
+  "/settings": {
+    title: "Settings",
+    subtitle: "Inspect real runtime status, storage, exports, and local cleanup controls.",
+  },
+};
 
 export function Header() {
+  const pathname = usePathname();
+  const current = titles[pathname] || titles["/"];
+
   return (
-    <header className="flex items-center justify-between py-4 min-h-[60px] w-full px-8 absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-slate-50 to-transparent">
-      <div className="flex items-center text-sm font-medium text-slate-600 bg-white/70 backdrop-blur-md px-4 py-2 rounded-full border border-slate-200 cursor-default shadow-sm hover:shadow transition-shadow">
-        <Lock size={14} className="text-slate-400 mr-2" />
-        patricia/local-browser-session
+    <header className="absolute left-0 right-0 top-0 z-10 flex min-h-[76px] items-center justify-between border-b border-slate-100 bg-slate-50/90 px-8 backdrop-blur-xl">
+      <div className="min-w-0">
+        <div className="mb-1 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
+          <Lock size={13} />
+          local browser session
+        </div>
+        <h1 className="truncate text-xl font-bold tracking-tight text-slate-900">{current.title}</h1>
+        <p className="hidden max-w-2xl truncate text-xs font-medium text-slate-500 lg:block">{current.subtitle}</p>
       </div>
-      <div className="flex items-center gap-4">
+
+      <div className="flex items-center gap-2">
+        <Link
+          href="/research"
+          className="hidden items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 shadow-sm transition-colors hover:bg-slate-50 md:inline-flex"
+        >
+          <Search size={14} />
+          Research
+        </Link>
         <Link
           href="/documents"
-          className="bg-slate-900 text-white px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2 hover:bg-slate-800 transition-colors shadow-[0_2px_10px_rgba(0,0,0,0.1)] active:scale-95"
+          className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-bold text-white shadow-[0_2px_10px_rgba(0,0,0,0.1)] transition-colors hover:bg-slate-800 active:scale-95"
         >
           <FileText size={14} className="text-slate-200" />
           Add case
         </Link>
-        <div className="w-8 h-8 bg-blue-100 rounded-full relative ml-2 cursor-pointer shadow-sm hover:ring-2 hover:ring-blue-200 transition-all">
-           <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white"></div>
-        </div>
+        <Link
+          href="/settings"
+          className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:bg-slate-50 hover:text-slate-900"
+          aria-label="Open settings"
+        >
+          <Settings size={16} />
+        </Link>
       </div>
     </header>
   );
