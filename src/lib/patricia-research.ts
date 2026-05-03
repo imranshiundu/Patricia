@@ -1,10 +1,12 @@
 export type PatriciaSourceKind = "case-law" | "legislation" | "constitution" | "regional-court" | "news" | "general-law";
+export type PatriciaSourceAuthority = "official" | "legal-index" | "news-context";
 
 export type PatriciaResearchSource = {
   id: string;
   name: string;
   country: string;
   kind: PatriciaSourceKind;
+  authority: PatriciaSourceAuthority;
   baseUrl: string;
   searchUrls: string[];
   priority: number;
@@ -15,6 +17,7 @@ export type PatriciaResearchResult = {
   sourceName: string;
   country: string;
   kind: PatriciaSourceKind;
+  authority: PatriciaSourceAuthority;
   title: string;
   url: string;
   snippet?: string;
@@ -26,6 +29,7 @@ export const PATRICIA_SOURCES: PatriciaResearchSource[] = [
     name: "Kenya Law Case Law",
     country: "Kenya",
     kind: "case-law",
+    authority: "official",
     baseUrl: "https://new.kenyalaw.org",
     searchUrls: [
       "https://new.kenyalaw.org/judgments/?q={query}",
@@ -38,6 +42,7 @@ export const PATRICIA_SOURCES: PatriciaResearchSource[] = [
     name: "Kenya Law Legislation",
     country: "Kenya",
     kind: "legislation",
+    authority: "official",
     baseUrl: "https://new.kenyalaw.org",
     searchUrls: [
       "https://new.kenyalaw.org/akn/ke/act/2010/constitution/eng@2010-09-03",
@@ -50,6 +55,7 @@ export const PATRICIA_SOURCES: PatriciaResearchSource[] = [
     name: "Uganda Legal Information Institute",
     country: "Uganda",
     kind: "case-law",
+    authority: "legal-index",
     baseUrl: "https://ulii.org",
     searchUrls: [
       "https://ulii.org/search?search={query}",
@@ -62,6 +68,7 @@ export const PATRICIA_SOURCES: PatriciaResearchSource[] = [
     name: "Tanzania Legal Information Institute",
     country: "Tanzania",
     kind: "case-law",
+    authority: "legal-index",
     baseUrl: "https://tanzlii.org",
     searchUrls: [
       "https://tanzlii.org/search?search={query}",
@@ -74,6 +81,7 @@ export const PATRICIA_SOURCES: PatriciaResearchSource[] = [
     name: "Zanzibar Legal Information Institute",
     country: "Zanzibar",
     kind: "case-law",
+    authority: "legal-index",
     baseUrl: "https://zanzibarlii.org",
     searchUrls: [
       "https://zanzibarlii.org/search?search={query}",
@@ -85,6 +93,7 @@ export const PATRICIA_SOURCES: PatriciaResearchSource[] = [
     name: "East African Court of Justice",
     country: "East Africa",
     kind: "regional-court",
+    authority: "official",
     baseUrl: "https://www.eacj.org",
     searchUrls: [
       "https://www.eacj.org/?s={query}",
@@ -96,6 +105,7 @@ export const PATRICIA_SOURCES: PatriciaResearchSource[] = [
     name: "African Legal Information Institute",
     country: "Africa",
     kind: "general-law",
+    authority: "legal-index",
     baseUrl: "https://africanlii.org",
     searchUrls: [
       "https://africanlii.org/search?search={query}",
@@ -107,6 +117,7 @@ export const PATRICIA_SOURCES: PatriciaResearchSource[] = [
     name: "Citizen Digital",
     country: "Kenya",
     kind: "news",
+    authority: "news-context",
     baseUrl: "https://www.citizen.digital",
     searchUrls: [
       "https://www.citizen.digital/search?q={query}",
@@ -118,6 +129,7 @@ export const PATRICIA_SOURCES: PatriciaResearchSource[] = [
     name: "The Standard Kenya",
     country: "Kenya",
     kind: "news",
+    authority: "news-context",
     baseUrl: "https://www.standardmedia.co.ke",
     searchUrls: [
       "https://www.standardmedia.co.ke/search?q={query}",
@@ -175,6 +187,7 @@ function parseAnchors(html: string, source: PatriciaResearchSource, query: strin
       sourceName: source.name,
       country: source.country,
       kind: source.kind,
+      authority: source.authority,
       title,
       url,
     });
@@ -243,6 +256,6 @@ export function sourcesAsPrompt(results: PatriciaResearchResult[]) {
   if (results.length === 0) return "No external legal research results were found.";
 
   return results
-    .map((result, index) => `${index + 1}. ${result.title}\nSource: ${result.sourceName} (${result.country})\nType: ${result.kind}\nURL: ${result.url}`)
+    .map((result, index) => `${index + 1}. ${result.title}\nSource: ${result.sourceName} (${result.country})\nAuthority: ${result.authority}\nType: ${result.kind}\nURL: ${result.url}`)
     .join("\n\n");
 }
