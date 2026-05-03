@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { researchEastAfricanLaw, sourcesAsPrompt } from "@/lib/patricia-research";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MAX_CONTEXT_CHARS = 60_000;
@@ -12,6 +13,11 @@ function chunkText(input: string, maxChars = 9000) {
   }
 
   return chunks;
+}
+
+function shouldUseResearch(question: string, caseText: string) {
+  if (caseText.trim().length > 500) return false;
+  return /fetch|find|search|look up|lookup|case|law|constitution|act|section|article|judgment|ruling|news|kenya|uganda|tanzania|rwanda|burundi|eacj/i.test(question);
 }
 
 async function callGroq(messages: Array<{ role: "system" | "user" | "assistant"; content: string }>, model: string) {
@@ -65,21 +71,27 @@ export async function POST(request: NextRequest) {
       ? chunks.map((chunk, index) => `[Part ${index + 1}/${chunks.length}] ${chunk}`).join("\n\n")
       : caseText.slice(0, MAX_CONTEXT_CHARS);
 
+    const researchResults = shouldUseResearch(question, caseText)
+      ? await researchEastAfricanLaw(question, 12)
+      : [];
+
     const caseHeader = [
       caseTitle ? `Title: ${caseTitle}` : "",
       citation ? `Citation: ${citation}` : "",
     ].filter(Boolean).join("\n");
+
+    const externalResearch = sourcesAsPrompt(researchResults);
 
     return callGroq(
       [
         {
           role: "system",
           content:
-            "You are Patricia, a careful legal research assistant for East African case law. Use simple, direct language. Answer from the provided text when available. Never invent citations, holdings, parties, laws, dates, courts, or statutes. If the provided text is missing or insufficient, say that clearly and answer generally only when safe.",
+            "You are Patricia, a careful legal research assistant for East African case law. Use simple, direct language. Use provided case text first. Use external legal research results only as source leads unless the result title and URL clearly support the answer. Never invent citations, holdings, parties, laws, dates, courts, or statutes. When you use external research leads, include the source name and URL. If a source is only a lead, say it needs verification.",
         },
         {
           role: "user",
-          content: `${caseHeader ? `${caseHeader}\n\n` : ""}Case text:\n${context || "No case text was provided."}\n\nUser question:\n${question}`,
+          content: `${caseHeader ? `${caseHeader}\n\n` : ""}Local case text:\n${context || "No local case text was provided."}\n\nExternal East African legal research leads:\n${externalResearch}\n\nUser question:\n${question}`,
         },
       ],
       model
