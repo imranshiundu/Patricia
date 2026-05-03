@@ -13,6 +13,7 @@ export function DocumentIntakeClient() {
 
   const chunks = useMemo(() => splitForGroq(caseText), [caseText]);
   const estimatedMinutes = chunks.reduce((total, chunk) => total + chunk.estimatedMinutes, 0);
+  const wordCount = useMemo(() => caseText.trim().split(/\s+/).filter(Boolean).length, [caseText]);
 
   const saveCase = () => {
     const cleanText = caseText.trim();
@@ -22,18 +23,24 @@ export function DocumentIntakeClient() {
     }
 
     const now = new Date().toISOString();
-    savePatriciaCase({
+    const saved = savePatriciaCase({
       id: makeCaseId(),
       title: title.trim() || extractCaseTitle(cleanText),
       citation: citation.trim() || undefined,
       sourceType: "paste",
-      textPreview: cleanText.slice(0, 1000),
+      textPreview: cleanText.slice(0, 1500),
+      fullText: cleanText,
       durationSeconds: estimatedMinutes * 60,
       createdAt: now,
       updatedAt: now,
     });
 
-    setStatus("Case saved locally. It will now appear in Patricia's sidebar and library.");
+    if (!saved) {
+      setStatus("This browser could not save the case. The text may be too large for localStorage. Try a shorter extract first.");
+      return;
+    }
+
+    setStatus("Case saved locally. It will now appear in Patricia's sidebar, library, and chat context selector.");
     setCaseText("");
     setTitle("");
     setCitation("");
@@ -104,6 +111,7 @@ export function DocumentIntakeClient() {
         <div className="bg-slate-900 text-white rounded-3xl p-5 h-fit shadow-sm">
           <h2 className="font-bold mb-3">Processing estimate</h2>
           <div className="space-y-3 text-sm text-slate-300">
+            <p><span className="text-white font-bold">{wordCount}</span> words</p>
             <p><span className="text-white font-bold">{chunks.length}</span> AI chunk{chunks.length === 1 ? "" : "s"}</p>
             <p><span className="text-white font-bold">~{estimatedMinutes}</span> narration minute{estimatedMinutes === 1 ? "" : "s"}</p>
             <p className="leading-relaxed">Long case laws should be processed in chunks. Do not send one or two hours of text/audio as a single API job.</p>
