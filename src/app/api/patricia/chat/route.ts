@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PatriciaResearchResult, researchEastAfricanLaw, sourcesAsPrompt } from "@/lib/patricia-research";
 import { buildResearchPlan } from "@/lib/patricia-legal-router";
+import { buildEffectiveLegalQuestion, resolveKnownCaseFromQuestion } from "@/lib/patricia-case-resolver";
 import {
   PatriciaCaseExtraction,
   buildCaseExtractionPrompt,
@@ -24,12 +25,12 @@ function chunkText(input: string, maxChars = 9000) {
 
 function shouldUseResearch(question: string, caseText: string) {
   if (caseText.trim().length > 500) return false;
-  return /fetch|find|search|look up|lookup|case|law|constitution|act|section|article|judgment|ruling|news|latest|kenya|uganda|tanzania|rwanda|burundi|eacj|brief|report|explain/i.test(question);
+  return /fetch|find|search|look up|lookup|case|law|constitution|act|section|article|judgment|ruling|news|latest|kenya|uganda|tanzania|rwanda|burundi|eacj|brief|report|explain|full/i.test(question);
 }
 
 function shouldExtractCase(question: string, caseText: string) {
   if (caseText.trim().length > 500) return true;
-  return /case name|case number|citation|neutral citation|criminal appeal|civil appeal|petition|judgment|ruling|case brief|brief|holding|reasoning|orders|issues/i.test(question);
+  return /case name|case number|citation|neutral citation|criminal appeal|civil appeal|petition|judgment|ruling|case brief|brief|holding|reasoning|orders|issues|full/i.test(question);
 }
 
 function sourceQuality(results: PatriciaResearchResult[]) {
@@ -77,20 +78,36 @@ function systemPrompt() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const question = String(body.question || "").trim();
-    const caseText = String(body.caseText || "").trim();
-    const caseTitle = String(body.caseTitle || "").trim();
-    const citation = String(body.citation || "").trim();
+    const originalQuestion = String(body.question || "").trim();
+    const previousMessages = Array.isArray(body.previousMessages) ? body.previousMessages : [];
+    const question = buildEffectiveLegalQuestion(originalQuestion, previousMessages);
+    const suppliedCaseText = String(body.caseText || "").trim();
+    const suppliedCaseTitle = String(body.caseTitle || "").trim();
+    const suppliedCitation = String(body.citation || "").trim();
     const model = String(body.model || process.env.GROQ_MODEL || "llama-3.1-8b-instant");
 
-    if (!question) return NextResponse.json({ error: "Question is required." }, { status: 400 });
+    if (!originalQuestion) return NextResponse.json({ error: "Question is required." }, { status: 400 });
+
+    const resolvedCase = suppliedCaseText.length > 500 ? null : await resolveKnownCaseFromQuestion(question);
+    const caseText = resolvedCase?.text || suppliedCaseText;
+    const caseTitle = suppliedCaseTitle || resolvedCase?.title || "";
+    const citation = suppliedCitation || resolvedCase?.citation || resolvedCase?.neutralCitation || "";
 
     const plan = buildResearchPlan(question);
     const chunks = chunkText(caseText);
     const context = chunks.length > 1 ? chunks.map((chunk, index) => `[Part ${index + 1}/${chunks.length}] ${chunk}`).join("\n\n") : caseText.slice(0, MAX_CONTEXT_CHARS);
-    const researchResults = shouldUseResearch(question, caseText) ? await researchEastAfricanLaw(question, 14) : [];
+    const researchResults = resolvedCase ? [{
+      sourceId: "kenya-law-known-case",
+      sourceName: "Kenya Law",
+      country: "Kenya",
+      kind: "case-law" as const,
+      authority: "official" as const,
+      title: resolvedCase.citation || resolvedCase.title,
+      url: resolvedCase.sourceUrl,
+      snippet: "Official Kenya Law judgment resolved by Patricia.",
+    }] : shouldUseResearch(question, caseText) ? await researchEastAfricanLaw(question, 8) : [];
     const quality = sourceQuality(researchResults);
-    const caseHeader = [caseTitle ? `Title: ${caseTitle}` : "", citation ? `Citation: ${citation}` : ""].filter(Boolean).join("\n");
+    const caseHeader = [caseTitle ? `Title: ${caseTitle}` : "", citation ? `Citation: ${citation}` : "", resolvedCase?.caseNumber ? `Case Number: ${resolvedCase.caseNumber}` : "", resolvedCase?.court ? `Court: ${resolvedCase.court}` : "", resolvedCase?.judge ? `Judge: ${resolvedCase.judge}` : "", resolvedCase?.date ? `Date: ${resolvedCase.date}` : "", resolvedCase?.sourceUrl ? `Source: ${resolvedCase.sourceUrl}` : ""].filter(Boolean).join("\n");
     const externalResearch = sourcesAsPrompt(researchResults);
     const planText = JSON.stringify(plan, null, 2);
 
@@ -104,7 +121,7 @@ export async function POST(request: NextRequest) {
           { role: "user", content: buildCaseExtractionPrompt(extractInput, question) },
         ],
         model,
-        { maxTokens: 1400, jsonMode: true }
+        { maxTokens: 1800, jsonMode: true }
       );
 
       if (!("error" in extracted)) {
@@ -132,7 +149,7 @@ export async function POST(request: NextRequest) {
         },
       ],
       model,
-      { maxTokens: 2600 }
+      { maxTokens: 3400 }
     );
 
     if ("error" in draft) return NextResponse.json(draft, { status: draft.status || 500 });
@@ -143,7 +160,7 @@ export async function POST(request: NextRequest) {
         { role: "user", content: buildVerificationPrompt(draft.content, evidenceLedger) },
       ],
       model,
-      { maxTokens: 2400 }
+      { maxTokens: 2800 }
     );
 
     const content = "error" in verified ? draft.content : verified.content;
@@ -151,6 +168,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       content,
       sourceQuality: quality,
+      resolvedCase: resolvedCase ? { title: resolvedCase.title, sourceUrl: resolvedCase.sourceUrl } : null,
       researchPlan: plan,
       extraction,
       evidenceLedger: ledgerItems,
