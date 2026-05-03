@@ -1,15 +1,16 @@
 # Patricia
 
-Patricia is a browser-first legal assistant for reading, questioning, summarising, and listening to case law. The product is designed for a hosted Vercel deployment without a permanent backend database. It should not pretend to have cases, users, paid plans, or stored audio that do not exist. User-created case records and generated audio are stored in the browser using `localStorage`, in-memory state, and object URLs until a real storage backend is added.
+Patricia is a browser-first legal assistant for reading, questioning, researching, summarising, and listening to case law. The product is designed for a hosted Vercel deployment without a permanent backend database. It should not pretend to have cases, users, paid plans, or stored audio that do not exist. User-created case records and generated audio are stored in the browser using `localStorage`, in-memory state, and object URLs until a real storage backend is added.
 
-Patricia's job is simple: take real legal text from the user, help the user understand it, and turn the useful parts into listenable audio without overwhelming free AI limits.
+Patricia's job is simple: take real legal text from the user, help the user understand it, fetch legal research leads from trusted East African sources, and turn useful parts into listenable audio without overwhelming free AI limits.
 
 ## Current technical reality
 
 - Framework: Next.js 16 App Router, React 19, TypeScript, Tailwind CSS 4.
 - Hosting target: Vercel.
 - AI provider: Groq through a server-side API route.
-- Client persistence: browser `localStorage` for case metadata and audio queue records.
+- Legal research: server-side source connectors for East African public legal sources.
+- Client persistence: browser `localStorage` for case metadata, chat history, queue jobs, and audio queue records.
 - Runtime audio: browser `HTMLAudioElement` playback from generated or imported audio URLs.
 - No Supabase, no database, no permanent file server, no fake case library.
 
@@ -32,7 +33,8 @@ Patricia should accept real legal material from the user:
 
 - pasted judgment text;
 - uploaded PDF or text file;
-- imported case text from a trusted legal source when that feature is added.
+- legal research links from trusted public sources;
+- imported case text from a trusted legal source when deeper import is added.
 
 The app should not show hard-coded recent cases as if the user created them. Empty states are better than fake data.
 
@@ -43,10 +45,28 @@ Patricia should answer as a careful legal research assistant:
 - summarise facts, issues, holdings, reasoning, orders, and cited authorities;
 - explain legal language in plain English;
 - extract party names, court, date, judge, citation, statutes, and legal principles when present;
-- say when the provided text is insufficient;
+- fetch source leads from East African legal websites when local context is missing;
+- say when the provided text or search result is insufficient;
 - never invent citations, statutes, holdings, or case names.
 
-### 3. Audio behavior
+### 3. East African legal research
+
+Patricia now has a research layer. It does not claim to have a full legal database in memory. It fetches live source leads and passes those leads to Groq for careful explanation.
+
+Initial source registry:
+
+- Kenya Law Case Law
+- Kenya Law Constitution/Legislation pages
+- Uganda Legal Information Institute
+- Tanzania Legal Information Institute
+- Zanzibar Legal Information Institute
+- East African Court of Justice
+- African Legal Information Institute
+- selected news/context sources such as Citizen Digital and The Standard Kenya
+
+Official legal sources must be treated as stronger authority than news. News is only context and should not be cited as the law.
+
+### 4. Audio behavior
 
 Patricia should reuse the voice pattern from the beta portfolio where possible, but the legal audio layer must be chunk-based. Case law audio can easily become one or two hours long, and one long audio job is the wrong architecture for a free Groq/API workflow.
 
@@ -92,14 +112,20 @@ Free APIs cannot safely process everything at once. Patricia should use a queue:
 - warn when the browser storage limit is near;
 - export/download generated notes so the user does not lose work.
 
-## Files added or corrected
+## Key files
 
-- `src/app/api/patricia/chat/route.ts` — server-side Groq chat route. Keeps the Groq API key off the browser.
+- `src/app/api/patricia/chat/route.ts` — server-side Groq chat route with legal research leads.
+- `src/app/api/patricia/research/route.ts` — research endpoint for East African legal/public sources.
+- `src/lib/patricia-research.ts` — source registry and research fetcher.
 - `src/lib/patricia-storage.ts` — browser persistence helpers for case records and audio chunks.
 - `src/lib/patricia-processing.ts` — chunking, narration-time estimation, and case-title helpers.
-- `src/components/Sidebar.tsx` — now reads recent cases from browser storage instead of hard-coded mock cases.
-- `src/components/RightSidebar.tsx` — now reads saved case/audio records from browser storage instead of mock case-law cards.
-- `src/components/AudioPlayer.tsx` — now accepts a real track, uses an actual `<audio>` element, and shows real progress.
+- `src/lib/patricia-queue.ts` — local queue for chunked summaries/audio jobs.
+- `src/components/PatriciaChat.tsx` — normal assistant chat UI.
+- `src/components/ResearchClient.tsx` — legal research search UI.
+- `src/components/DocumentIntakeClient.tsx` — real case intake and queue creation.
+- `src/components/LibraryClient.tsx` — saved local case library.
+- `src/components/QueuePanel.tsx` — long-case queue visibility.
+- `src/components/AudioPlayer.tsx` — real audio playback component.
 
 ## Development
 
@@ -129,9 +155,9 @@ Patricia is a legal research assistant, not a lawyer. The interface should alway
 
 ## Next implementation steps
 
-1. Add a real document intake page that saves pasted/uploaded text with `savePatriciaCase`.
-2. Add a queue UI for long judgments and many uploaded cases.
+1. Add full HTML/document import for selected legal research results.
+2. Add PDF extraction for uploaded judgments.
 3. Add text-to-speech integration using the same voice direction as the beta portfolio.
 4. Move audio blob storage from object URLs to IndexedDB for better large-file handling.
-5. Add export options for summaries, legal briefs, and generated narration scripts.
+5. Add export options for summaries, legal briefs, source lists, and generated narration scripts.
 6. Add source verification fields so Patricia can track where each case came from.
