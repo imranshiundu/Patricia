@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PatriciaResearchResult, researchEastAfricanLaw, sourcesAsPrompt } from "@/lib/patricia-research";
 import { buildResearchPlan } from "@/lib/patricia-legal-router";
+import {
+  PatriciaCaseExtraction,
+  buildCaseExtractionPrompt,
+  buildExtractionLedger,
+  buildFinalLegalAnswerPrompt,
+  buildSourceLedger,
+  buildVerificationPrompt,
+  evidenceLedgerAsPrompt,
+  parseLooseJson,
+} from "@/lib/patricia-legal-briefing";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MAX_CONTEXT_CHARS = 60_000;
@@ -17,6 +27,11 @@ function shouldUseResearch(question: string, caseText: string) {
   return /fetch|find|search|look up|lookup|case|law|constitution|act|section|article|judgment|ruling|news|latest|kenya|uganda|tanzania|rwanda|burundi|eacj|brief|report|explain/i.test(question);
 }
 
+function shouldExtractCase(question: string, caseText: string) {
+  if (caseText.trim().length > 500) return true;
+  return /case name|case number|citation|neutral citation|criminal appeal|civil appeal|petition|judgment|ruling|case brief|brief|holding|reasoning|orders|issues/i.test(question);
+}
+
 function sourceQuality(results: PatriciaResearchResult[]) {
   if (results.some((item) => item.authority === "official")) return "official-source-leads-found";
   if (results.some((item) => item.authority === "legal-index")) return "legal-index-leads-found";
@@ -24,14 +39,24 @@ function sourceQuality(results: PatriciaResearchResult[]) {
   return "no-external-source-leads";
 }
 
-async function callGroq(messages: Array<{ role: "system" | "user" | "assistant"; content: string }>, model: string) {
+async function callGroq(
+  messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
+  model: string,
+  options?: { maxTokens?: number; jsonMode?: boolean }
+) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return { error: "Missing GROQ_API_KEY. Add it in Vercel Project Settings > Environment Variables.", status: 500 };
 
   const response = await fetch(GROQ_API_URL, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model, messages, temperature: 0.08, max_tokens: 2400 }),
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature: 0.05,
+      max_tokens: options?.maxTokens ?? 2400,
+      ...(options?.jsonMode ? { response_format: { type: "json_object" } } : {}),
+    }),
   });
 
   if (!response.ok) return { error: "Groq request failed", detail: await response.text(), status: response.status };
@@ -39,15 +64,14 @@ async function callGroq(messages: Array<{ role: "system" | "user" | "assistant";
   return { content: data.choices?.[0]?.message?.content ?? "" };
 }
 
-function buildProfessionalPrompt(args: {
-  question: string;
-  context: string;
-  caseHeader: string;
-  externalResearch: string;
-  quality: string;
-  planText: string;
-}) {
-  return `${args.caseHeader ? `${args.caseHeader}\n\n` : ""}RESEARCH PLAN:\n${args.planText}\n\nLOCAL CASE TEXT:\n${args.context || "No local case text was provided."}\n\nEXTERNAL EAST AFRICAN LEGAL RESEARCH LEADS:\n${args.externalResearch}\n\nSOURCE QUALITY: ${args.quality}\n\nUSER QUESTION:\n${args.question}\n\nRESPONSE RULES:\n1. Do not say "I will try" or "I can search" in the final answer.\n2. If the plan says Kenya, do not lead with Uganda or Tanzania unless no Kenyan source exists.\n3. Separate verified facts from research leads.\n4. Never invent case details, parties, courts, legal holdings, statutes, citations, or dates.\n5. If the source lead is generic, say it is generic and not enough.\n6. If asked for a brief/report, explain the legal principle, procedural history, issue, holding, reasoning, importance, and limits, but only where supported.\n7. End by asking whether the user wants more depth.\n\nUse this exact answer structure:\n\n## Answer\nDirect professional answer.\n\n## Case or subject identified\nJurisdiction, likely court/source path, and why.\n\n## Explanation\nPlain-English explanation of the issue, holding/principle, and why it matters. If not verified, explain what is missing.\n\n## Verified facts\nOnly facts supported by local text or strong source leads.\n\n## Sources and confidence\nList source leads with authority and confidence.\n\n## What Patricia should check next\nList documents/PDFs/statutes/source pages to import next.\n\n## Want more?\nAsk if the user wants the full brief, student notes, counsel-style memo, or audio.`;
+function systemPrompt() {
+  return [
+    "You are Patricia, a careful East African legal research assistant.",
+    "You behave like a disciplined legal researcher: jurisdiction first, source quality second, evidence third, answer last.",
+    "You do not hallucinate, and you do not give final legal advice.",
+    "You help students, lawyers, and researchers understand and verify legal material.",
+    "Every important claim must be supported by local legal text, trusted source leads, or clearly marked inference.",
+  ].join(" ");
 }
 
 export async function POST(request: NextRequest) {
@@ -70,24 +94,66 @@ export async function POST(request: NextRequest) {
     const externalResearch = sourcesAsPrompt(researchResults);
     const planText = JSON.stringify(plan, null, 2);
 
-    const groq = await callGroq(
+    let extraction: PatriciaCaseExtraction | null = null;
+
+    if (shouldExtractCase(question, caseText || caseHeader)) {
+      const extractInput = [caseHeader, context].filter(Boolean).join("\n\n");
+      const extracted = await callGroq(
+        [
+          { role: "system", content: systemPrompt() },
+          { role: "user", content: buildCaseExtractionPrompt(extractInput, question) },
+        ],
+        model,
+        { maxTokens: 1400, jsonMode: true }
+      );
+
+      if (!("error" in extracted)) {
+        extraction = parseLooseJson<PatriciaCaseExtraction>(extracted.content);
+      }
+    }
+
+    const ledgerItems = [...buildExtractionLedger(extraction), ...buildSourceLedger(researchResults)];
+    const evidenceLedger = evidenceLedgerAsPrompt(ledgerItems);
+
+    const draft = await callGroq(
       [
+        { role: "system", content: systemPrompt() },
         {
-          role: "system",
-          content:
-            "You are Patricia, a careful East African legal research assistant. Behave like a disciplined legal researcher: jurisdiction first, source quality second, answer third. Do not hallucinate. You are not a lawyer and you do not give final legal advice. You help students, lawyers, and researchers understand and verify legal material.",
+          role: "user",
+          content: buildFinalLegalAnswerPrompt({
+            question,
+            caseHeader,
+            planText,
+            sourceQuality: quality,
+            extraction,
+            evidenceLedger,
+            externalResearch,
+          }),
         },
-        { role: "user", content: buildProfessionalPrompt({ question, context, caseHeader, externalResearch, quality, planText }) },
       ],
-      model
+      model,
+      { maxTokens: 2600 }
     );
 
-    if ("error" in groq) return NextResponse.json(groq, { status: groq.status || 500 });
+    if ("error" in draft) return NextResponse.json(draft, { status: draft.status || 500 });
+
+    const verified = await callGroq(
+      [
+        { role: "system", content: systemPrompt() },
+        { role: "user", content: buildVerificationPrompt(draft.content, evidenceLedger) },
+      ],
+      model,
+      { maxTokens: 2400 }
+    );
+
+    const content = "error" in verified ? draft.content : verified.content;
 
     return NextResponse.json({
-      content: groq.content,
+      content,
       sourceQuality: quality,
       researchPlan: plan,
+      extraction,
+      evidenceLedger: ledgerItems,
       sources: researchResults.map((source) => ({ title: source.title, url: source.url, authority: source.authority, sourceName: source.sourceName })),
     });
   } catch {
