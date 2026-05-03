@@ -33,6 +33,35 @@ function shouldExtractCase(question: string, caseText: string) {
   return /case name|case number|citation|neutral citation|criminal appeal|civil appeal|petition|judgment|ruling|case brief|brief|holding|reasoning|orders|issues|full/i.test(question);
 }
 
+function wantsDeepBrief(question: string) {
+  return /full\s+brief|brief\s+me|case\s+brief|tell\s+me\s+about|explain|proceed|continue|go\s+on|what\s+happened|holding|reasoning|orders|facts|issues/i.test(question);
+}
+
+function answerModeInstruction(question: string, hasCaseText: boolean) {
+  if (wantsDeepBrief(question) && hasCaseText) {
+    return [
+      "ANSWER MODE: FULL_CASE_BRIEF.",
+      "Write a careful 700-1500 word user-facing case brief unless the verified material is too thin.",
+      "Do not rush. Explain the story of the case, the appeal, the legal questions, the court's reasoning, the decision, and why it matters.",
+      "Use plain English. Where a legal term appears, explain it briefly in context.",
+      "The answer should feel like a patient legal tutor explaining the case to someone who has not read the judgment.",
+    ].join("\n");
+  }
+
+  if (wantsDeepBrief(question) && !hasCaseText) {
+    return [
+      "ANSWER MODE: CASE_METADATA_ONLY.",
+      "Explain what Patricia can verify from the supplied case details, then clearly state that the full facts, issues, holding, reasoning, and orders require the judgment text or successful official import.",
+      "Do not fill the gap with general legal discussion.",
+    ].join("\n");
+  }
+
+  return [
+    "ANSWER MODE: NORMAL_LEGAL_EXPLANATION.",
+    "Answer clearly and fully enough for a public user to understand, but do not over-expand when the user asked a narrow question.",
+  ].join("\n");
+}
+
 function sourceQuality(results: PatriciaResearchResult[]) {
   if (results.some((item) => item.authority === "official")) return "official-source-leads-found";
   if (results.some((item) => item.authority === "legal-index")) return "legal-index-leads-found";
@@ -90,6 +119,8 @@ export async function POST(request: NextRequest) {
 
     const resolvedCase = suppliedCaseText.length > 500 ? null : await resolveKnownCaseFromQuestion(question);
     const caseText = resolvedCase?.text || suppliedCaseText;
+    const hasCaseText = caseText.trim().length > 500;
+    const answerMode = answerModeInstruction(question, hasCaseText);
     const caseTitle = suppliedCaseTitle || resolvedCase?.title || "";
     const citation = suppliedCitation || resolvedCase?.citation || resolvedCase?.neutralCitation || "";
 
@@ -121,7 +152,7 @@ export async function POST(request: NextRequest) {
           { role: "user", content: buildCaseExtractionPrompt(extractInput, question) },
         ],
         model,
-        { maxTokens: 1800, jsonMode: true }
+        { maxTokens: 2200, jsonMode: true }
       );
 
       if (!("error" in extracted)) {
@@ -138,7 +169,7 @@ export async function POST(request: NextRequest) {
         {
           role: "user",
           content: buildFinalLegalAnswerPrompt({
-            question,
+            question: `${question}\n\n${answerMode}`,
             caseHeader,
             planText,
             sourceQuality: quality,
@@ -149,7 +180,7 @@ export async function POST(request: NextRequest) {
         },
       ],
       model,
-      { maxTokens: 3400 }
+      { maxTokens: wantsDeepBrief(question) && hasCaseText ? 5200 : 3400 }
     );
 
     if ("error" in draft) return NextResponse.json(draft, { status: draft.status || 500 });
@@ -157,16 +188,17 @@ export async function POST(request: NextRequest) {
     const verified = await callGroq(
       [
         { role: "system", content: systemPrompt() },
-        { role: "user", content: buildVerificationPrompt(draft.content, evidenceLedger) },
+        { role: "user", content: buildVerificationPrompt(draft.content, `${answerMode}\n\n${evidenceLedger}`) },
       ],
       model,
-      { maxTokens: 2800 }
+      { maxTokens: wantsDeepBrief(question) && hasCaseText ? 4200 : 2800 }
     );
 
     const content = "error" in verified ? draft.content : verified.content;
 
     return NextResponse.json({
       content,
+      answerMode: wantsDeepBrief(question) && hasCaseText ? "full_case_brief" : wantsDeepBrief(question) ? "case_metadata_only" : "normal",
       sourceQuality: quality,
       resolvedCase: resolvedCase ? { title: resolvedCase.title, sourceUrl: resolvedCase.sourceUrl } : null,
       researchPlan: plan,
