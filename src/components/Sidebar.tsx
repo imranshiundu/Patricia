@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   ListChecks,
   FileText,
+  Scale,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -84,6 +85,7 @@ export function Sidebar() {
 
         <nav className="space-y-1 mb-8">
           <NavItem href="/" icon={<LayoutDashboard size={18} />} label="Chat" active={pathname === "/"} />
+          <NavItem href="/research" icon={<Scale size={18} />} label="Research" active={pathname === "/research"} />
           <NavItem href="/documents" icon={<FileText size={18} />} label="Documents" active={pathname === "/documents"} />
           <NavItem href="/library" icon={<Book size={18} />} label="Library" active={pathname === "/library"} />
           <NavItem href="/queue" icon={<ListChecks size={18} />} label="Queue" active={pathname === "/queue"} />
