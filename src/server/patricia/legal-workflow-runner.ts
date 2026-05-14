@@ -1,6 +1,6 @@
 import { buildPatriciaSkillRunPlan } from "@/lib/patricia-skills/registry";
 import { buildClaudeForLegalRuntimePrompt, claudeForLegalSkillPath, loadClaudeForLegalSkill } from "@/lib/claude-for-legal-adapter";
-import { callPatriciaLLM } from "@/lib/patricia-llm";
+import { callPatriciaLLM } from "@/server/patricia/llm";
 
 const MAX_CONTEXT_CHARS = 80_000;
 
@@ -40,6 +40,8 @@ function buildSystemPrompt(args: { sourcePath: string; providerInstruction: stri
     "Patricia is a server-backed legal workflow system.",
     "Patricia manages product shell, chat UI, document intake, storage, provider routing, and orchestration.",
     "Claude-for-legal source files provide the legal workflow brain.",
+    "All LLM/API calls happen on the Patricia backend/server layer only.",
+    "The browser must never own provider API keys or call LLM vendors directly.",
     "Follow the loaded claude-for-legal source file carefully.",
     "Do not use retired Patricia legal behavior or old hardcoded legal routes.",
     "Do not claim to have used external connectors or third-party systems unless connector output is explicitly provided in the request.",
@@ -174,12 +176,14 @@ export async function runPatriciaLegalWorkflow(body: PatriciaLegalWorkflowReques
     llm: {
       provider: draft.provider,
       model: draft.model,
+      serverOnly: true,
     },
     backend: {
       mode: "server-ready",
       runtime: "nodejs",
       orchestration: "patricia-server",
       workflowBrain: "anthropics/claude-for-legal",
+      llmCalls: "server-only",
     },
     answerMode: "claude-for-legal",
     sourceQuality: hasDocument ? "claude-for-legal-source-plus-user-document" : "claude-for-legal-source-only",
