@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Copy, Edit3, Share2, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { ReactNode, useState } from "react";
 import { PatriciaChatMessage } from "@/lib/patricia-chat-sessions";
 import { cleanVisibleAnswer } from "@/lib/patricia-output";
 
@@ -89,7 +89,7 @@ function SkillMeta({ message }: { message: PatriciaChatMessage }) {
   );
 }
 
-function ActionButton({ children, isUser, onClick }: { children: React.ReactNode; isUser: boolean; onClick: () => void }) {
+function ActionButton({ children, isUser, onClick }: { children: ReactNode; isUser: boolean; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick} className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium ${isUser ? "text-white/70 hover:bg-white/10" : "text-slate-400 hover:bg-slate-50 hover:text-slate-700"}`}>
       {children}
