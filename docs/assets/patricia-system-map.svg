@@ -1,0 +1,52 @@
+<svg width="1200" height="560" viewBox="0 0 1200 560" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Patricia system map</title>
+  <desc id="desc">A colourful architecture map showing Patricia turning public legal and policy documents into cited explanations.</desc>
+  <rect width="1200" height="560" rx="36" fill="#0F172A"/>
+  <circle cx="1050" cy="90" r="160" fill="#2563EB" opacity="0.18"/>
+  <circle cx="150" cy="470" r="170" fill="#F59E0B" opacity="0.16"/>
+  <circle cx="610" cy="120" r="120" fill="#10B981" opacity="0.13"/>
+  <text x="60" y="74" fill="#F8FAFC" font-family="Inter,Arial,sans-serif" font-size="38" font-weight="800">Patricia</text>
+  <text x="60" y="112" fill="#CBD5E1" font-family="Inter,Arial,sans-serif" font-size="18">Public-document intelligence for East Africa</text>
+
+  <g font-family="Inter,Arial,sans-serif">
+    <rect x="60" y="175" width="235" height="110" rx="22" fill="#F8FAFC"/>
+    <text x="88" y="217" fill="#0F172A" font-size="19" font-weight="800">Real documents</text>
+    <text x="88" y="248" fill="#475569" font-size="15">Judgments, statutes, policy</text>
+    <text x="88" y="272" fill="#475569" font-size="15">notices, bills, circulars</text>
+
+    <rect x="360" y="175" width="235" height="110" rx="22" fill="#DBEAFE"/>
+    <text x="388" y="217" fill="#1E3A8A" font-size="19" font-weight="800">Legal router</text>
+    <text x="388" y="248" fill="#1D4ED8" font-size="15">Jurisdiction, intent, source</text>
+    <text x="388" y="272" fill="#1D4ED8" font-size="15">priority and answer mode</text>
+
+    <rect x="660" y="175" width="235" height="110" rx="22" fill="#DCFCE7"/>
+    <text x="688" y="217" fill="#14532D" font-size="19" font-weight="800">Evidence ledger</text>
+    <text x="688" y="248" fill="#15803D" font-size="15">Claims, support, source</text>
+    <text x="688" y="272" fill="#15803D" font-size="15">and confidence labels</text>
+
+    <rect x="960" y="175" width="180" height="110" rx="22" fill="#FEF3C7"/>
+    <text x="988" y="217" fill="#78350F" font-size="19" font-weight="800">Clear output</text>
+    <text x="988" y="248" fill="#92400E" font-size="15">Plain, cited, useful</text>
+    <text x="988" y="272" fill="#92400E" font-size="15">human explanation</text>
+
+    <path d="M305 230H348" stroke="#94A3B8" stroke-width="5" stroke-linecap="round"/>
+    <path d="M605 230H648" stroke="#94A3B8" stroke-width="5" stroke-linecap="round"/>
+    <path d="M905 230H948" stroke="#94A3B8" stroke-width="5" stroke-linecap="round"/>
+
+    <rect x="160" y="375" width="205" height="78" rx="20" fill="#1E293B" stroke="#334155"/>
+    <text x="190" y="407" fill="#F8FAFC" font-size="17" font-weight="800">Citizens</text>
+    <text x="190" y="433" fill="#CBD5E1" font-size="14">Understand impact</text>
+
+    <rect x="405" y="375" width="205" height="78" rx="20" fill="#1E293B" stroke="#334155"/>
+    <text x="435" y="407" fill="#F8FAFC" font-size="17" font-weight="800">Students</text>
+    <text x="435" y="433" fill="#CBD5E1" font-size="14">Learn cases faster</text>
+
+    <rect x="650" y="375" width="205" height="78" rx="20" fill="#1E293B" stroke="#334155"/>
+    <text x="680" y="407" fill="#F8FAFC" font-size="17" font-weight="800">Journalists</text>
+    <text x="680" y="433" fill="#CBD5E1" font-size="14">Brief public issues</text>
+
+    <rect x="895" y="375" width="205" height="78" rx="20" fill="#1E293B" stroke="#334155"/>
+    <text x="925" y="407" fill="#F8FAFC" font-size="17" font-weight="800">Businesses</text>
+    <text x="925" y="433" fill="#CBD5E1" font-size="14">Track obligations</text>
+  </g>
+</svg>
