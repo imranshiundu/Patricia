@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PatriciaResearchResult, researchEastAfricanLaw, sourcesAsPrompt } from "@/lib/patricia-research";
-import { buildResearchPlan } from "@/lib/patricia-legal-router";
-import { buildEffectiveLegalQuestion, resolveKnownCaseFromQuestion } from "@/lib/patricia-case-resolver";
+import { buildEffectiveLegalQuestion } from "@/lib/patricia-case-resolver";
+import { buildPatriciaSkillRunPlan } from "@/lib/patricia-skills/registry";
 import {
   PatriciaCaseExtraction,
   PatriciaDocumentExtraction,
-  PatriciaDocumentType,
   PatriciaEvidenceItem,
-  PatriciaJurisdiction,
   PatriciaRouteDecision,
   PatriciaSource,
   buildCaseExtractionPrompt,
@@ -15,7 +12,6 @@ import {
   buildExtractionLedger,
   buildFinalLegalAnswerPrompt,
   buildPatriciaAnswerContract,
-  buildSourceLedger,
   buildVerificationPrompt,
   computeTrustScore,
   confidenceFromTrustScore,
@@ -24,7 +20,6 @@ import {
   makeLocalDocumentSource,
   normalizeSources,
   parseLooseJson,
-  rankSourceAuthority,
   routePatriciaTask,
   shouldAbstain,
 } from "@/lib/patricia-legal-briefing";
@@ -43,119 +38,26 @@ function chunkText(input: string, maxChars = 9000) {
   return chunks;
 }
 
-function countryToJurisdiction(country: string): PatriciaJurisdiction {
-  const value = country.toLowerCase();
-  if (value.includes("kenya")) return "kenya";
-  if (value.includes("uganda")) return "uganda";
-  if (value.includes("tanzania")) return "tanzania";
-  if (value.includes("zanzibar")) return "zanzibar";
-  if (value.includes("rwanda")) return "rwanda";
-  if (value.includes("burundi")) return "burundi";
-  if (value.includes("east africa")) return "eac";
-  return "unknown";
-}
-
-function researchKindToDocumentType(kind: PatriciaResearchResult["kind"]): PatriciaDocumentType {
-  if (kind === "case-law" || kind === "regional-court") return "case-law";
-  if (kind === "legislation") return "statute";
-  if (kind === "constitution") return "constitution";
-  if (kind === "news") return "news-context";
-  return "unknown";
-}
-
-function researchResultsToSources(results: PatriciaResearchResult[]): PatriciaSource[] {
-  return results.map((result, index) => ({
-    id: result.sourceId || `research-source-${index + 1}`,
-    title: result.title,
-    url: result.url,
-    sourceName: result.sourceName,
-    jurisdiction: countryToJurisdiction(result.country),
-    documentType: researchKindToDocumentType(result.kind),
-    authority: rankSourceAuthority(result),
-    excerpt: result.snippet,
-    retrievedAt: new Date().toISOString(),
-  }));
-}
-
-function sourceQuality(results: PatriciaResearchResult[]) {
-  if (results.some((item) => item.authority === "official")) return "official-source-leads-found";
-  if (results.some((item) => item.authority === "legal-index")) return "legal-index-leads-found";
-  if (results.some((item) => item.authority === "news-context")) return "news-context-only";
-  return "no-external-source-leads";
-}
-
 function wantsDeepAnswer(question: string) {
-  return /full|detailed|comprehensive|brief|report|memo|explain|decode|tell me about|what happened|reasoning|orders|facts|issues/i.test(question);
+  return /full|detailed|comprehensive|brief|report|memo|explain|decode|tell me about|what happened|reasoning|orders|facts|issues|review|draft|triage|assessment/i.test(question);
 }
 
-function shouldUseResearch(question: string, route: PatriciaRouteDecision, localText: string) {
-  if (route.task === "compare-documents") return false;
-  if (route.task === "legal-research" || route.task === "journalist-brief" || route.task === "business-risk") return true;
-  if (localText.trim().length > 500 && !/latest|current|update|news|verify|source|citation|authority/i.test(question)) return false;
-  return /fetch|find|search|look up|lookup|case|law|constitution|act|section|article|judgment|ruling|news|latest|kenya|uganda|tanzania|rwanda|burundi|eacj|brief|report|explain|full|policy|bill|notice|gazette/i.test(question);
-}
-
-function shouldExtractCase(question: string, route: PatriciaRouteDecision, localText: string) {
+function shouldExtractCase(question: string, route: PatriciaRouteDecision, localText: string, command: string) {
+  if (command === "/law-student:case-brief") return true;
   if (route.documentType === "case-law" || route.task === "case-brief") return true;
   if (localText.trim().length > 500 && /court|judgment|ruling|appeal|petition|plaintiff|defendant|appellant|respondent/i.test(localText)) return true;
   return /case name|case number|citation|neutral citation|criminal appeal|civil appeal|petition|judgment|ruling|case brief|brief|holding|reasoning|orders|issues|full/i.test(question);
 }
 
-function shouldExtractPublicDocument(route: PatriciaRouteDecision, localText: string) {
+function shouldExtractDocument(command: string, localText: string) {
   if (!localText.trim()) return false;
-  if (shouldExtractCase("", route, localText)) return false;
-  return ["policy-decoder", "citizen-impact", "document-summary", "clause-lookup", "business-risk", "journalist-brief", "student-notes", "memo-draft", "general-chat"].includes(route.task);
+  return !["/law-student:case-brief"].includes(command);
 }
 
-function answerModeInstruction(question: string, route: PatriciaRouteDecision, hasLocalText: boolean) {
-  const mode = wantsDeepAnswer(question) ? "DEEP" : "NORMAL";
-  if (route.task === "case-brief" && hasLocalText) {
-    return [
-      "ANSWER MODE: FULL_CASE_BRIEF.",
-      "Write a careful user-facing case brief unless the verified material is too thin.",
-      "Explain the story of the case, the legal questions, the reasoning, the decision, and why it matters.",
-      "Use plain language unless the route asks for professional legal language.",
-    ].join("\n");
-  }
-
-  if (route.task === "case-brief" && !hasLocalText) {
-    return [
-      "ANSWER MODE: CASE_METADATA_OR_RESEARCH_ONLY.",
-      "Explain only what Patricia can verify from resolved metadata or source leads.",
-      "Say that a full brief requires the full judgment text or a successful official import.",
-    ].join("\n");
-  }
-
-  if (["policy-decoder", "citizen-impact", "document-summary", "clause-lookup", "business-risk", "journalist-brief"].includes(route.task)) {
-    return [
-      `ANSWER MODE: ${mode}_PUBLIC_DOCUMENT_DECODER.`,
-      "Explain meaning, affected people, duties, risks, deadlines, and next action only when supported by source text or trusted leads.",
-      "Do not turn news into law. Treat news as context only.",
-    ].join("\n");
-  }
-
-  return [
-    `ANSWER MODE: ${mode}_LEGAL_EXPLANATION.`,
-    "Answer clearly and with source discipline. Do not overclaim when support is thin.",
-  ].join("\n");
-}
-
-function buildCaseHeader(args: {
-  caseTitle?: string;
-  citation?: string;
-  caseNumber?: string;
-  court?: string;
-  judge?: string;
-  date?: string;
-  sourceUrl?: string;
-}) {
+function buildCaseHeader(args: { caseTitle?: string; citation?: string; sourceUrl?: string }) {
   return [
     args.caseTitle ? `Title: ${args.caseTitle}` : "",
     args.citation ? `Citation: ${args.citation}` : "",
-    args.caseNumber ? `Case Number: ${args.caseNumber}` : "",
-    args.court ? `Court: ${args.court}` : "",
-    args.judge ? `Judge: ${args.judge}` : "",
-    args.date ? `Date: ${args.date}` : "",
     args.sourceUrl ? `Source: ${args.sourceUrl}` : "",
   ].filter(Boolean).join("\n");
 }
@@ -170,7 +72,7 @@ function buildDocumentLedger(extraction: PatriciaDocumentExtraction | null): Pat
       items.push({
         id: makeEvidenceId(items.length),
         claim: `${key.replace(/_/g, " ")}: ${value}`,
-        support: "Extracted from the supplied public/legal document text.",
+        support: "Extracted from the supplied legal/workflow document text.",
         source: "local document text",
         confidence: "high",
         kind: "document-fact",
@@ -228,13 +130,16 @@ async function callGroq(messages: GroqMessage[], model: string, options?: { maxT
   return { content: data.choices?.[0]?.message?.content ?? "" };
 }
 
-function systemPrompt(route: PatriciaRouteDecision) {
+function systemPrompt(route: PatriciaRouteDecision, skillSystemAddendum: string) {
   return [
-    "You are Patricia, a careful East African legal and public-document research assistant.",
-    "Work in this order: jurisdiction, document type, source quality, evidence, answer, verification.",
-    "Do not give final legal advice and do not invent missing material.",
-    `Current task: ${route.task}. Jurisdiction: ${route.jurisdiction}. Document type: ${route.documentType}. Output mode: ${route.outputMode}.`,
-  ].join(" ");
+    "You are Patricia running a Claude-for-legal style workflow inside Patricia.",
+    "The selected legal skill controls the workflow. Do not use old generic Patricia legal command behavior.",
+    "Every output is a draft for attorney review, not legal advice or a legal conclusion.",
+    "Use only supplied facts, supplied documents, and clearly labeled assumptions. Do not invent authorities or citations.",
+    "When facts, documents, practice profile, or connector results are missing, continue with an intake-quality output and clearly list the missing inputs.",
+    `Legacy compatibility route: ${route.task}. Document type: ${route.documentType}. Output mode: ${route.outputMode}.`,
+    skillSystemAddendum,
+  ].join("\n");
 }
 
 export async function POST(request: NextRequest) {
@@ -245,68 +150,49 @@ export async function POST(request: NextRequest) {
     const suppliedDocumentText = String(body.caseText || body.documentText || body.localDocument || "").trim();
     const suppliedCaseTitle = String(body.caseTitle || body.documentTitle || "").trim();
     const suppliedCitation = String(body.citation || "").trim();
+    const selectedCommand = String(body.command || body.selectedCommand || "").trim();
+    const practiceProfile = String(body.practiceProfile || "").trim();
     const model = String(body.model || process.env.GROQ_MODEL || "llama-3.1-8b-instant");
 
     if (!originalQuestion) return NextResponse.json({ error: "Question is required." }, { status: 400 });
 
-    const question = buildEffectiveLegalQuestion(originalQuestion, previousMessages);
-    const resolvedCase = suppliedDocumentText.length > 500 ? null : await resolveKnownCaseFromQuestion(question);
-    const localText = resolvedCase?.text || suppliedDocumentText;
-    const hasLocalText = localText.trim().length > 500;
-    const preliminaryHeader = buildCaseHeader({ caseTitle: suppliedCaseTitle || resolvedCase?.title, citation: suppliedCitation || resolvedCase?.citation || resolvedCase?.neutralCitation, caseNumber: resolvedCase?.caseNumber, court: resolvedCase?.court, judge: resolvedCase?.judge, date: resolvedCase?.date, sourceUrl: resolvedCase?.sourceUrl });
-    const route = routePatriciaTask(`${question}\n${preliminaryHeader}\n${localText.slice(0, 6000)}`, hasLocalText);
-    const answerMode = answerModeInstruction(question, route, hasLocalText);
-    const plan = buildResearchPlan(question);
-
-    const chunks = chunkText(localText);
-    const context = chunks.length > 1 ? chunks.map((chunk, index) => `[Part ${index + 1}/${chunks.length}] ${chunk}`).join("\n\n") : localText.slice(0, MAX_CONTEXT_CHARS);
-
-    const researchResults = resolvedCase
-      ? [{
-          sourceId: "kenya-law-known-case",
-          sourceName: "Kenya Law",
-          country: "Kenya",
-          kind: "case-law" as const,
-          authority: "official" as const,
-          title: resolvedCase.citation || resolvedCase.title,
-          url: resolvedCase.sourceUrl,
-          snippet: "Official Kenya Law judgment resolved by Patricia.",
-        }]
-      : shouldUseResearch(question, route, localText)
-        ? await researchEastAfricanLaw(question, 8)
-        : [];
-
-    const caseHeader = buildCaseHeader({
-      caseTitle: suppliedCaseTitle || resolvedCase?.title,
-      citation: suppliedCitation || resolvedCase?.citation || resolvedCase?.neutralCitation,
-      caseNumber: resolvedCase?.caseNumber,
-      court: resolvedCase?.court,
-      judge: resolvedCase?.judge,
-      date: resolvedCase?.date,
-      sourceUrl: resolvedCase?.sourceUrl,
+    const effectiveQuestion = buildEffectiveLegalQuestion(originalQuestion, previousMessages);
+    const skillPlan = buildPatriciaSkillRunPlan({
+      command: selectedCommand,
+      question: effectiveQuestion,
+      documentText: suppliedDocumentText,
+      documentTitle: suppliedCaseTitle,
+      citation: suppliedCitation,
+      practiceProfile,
+      previousMessages,
     });
 
-    const externalResearch = sourcesAsPrompt(researchResults);
-    const quality = sourceQuality(researchResults);
-    const planText = JSON.stringify(plan, null, 2);
+    const localText = suppliedDocumentText;
+    const hasLocalText = localText.trim().length > 500;
+    const caseHeader = buildCaseHeader({ caseTitle: suppliedCaseTitle, citation: suppliedCitation });
+    const route = routePatriciaTask(`${skillPlan.normalizedQuestion}\n${caseHeader}\n${localText.slice(0, 6000)}`, hasLocalText);
+    const chunks = chunkText(localText);
+    const context = chunks.length > 1 ? chunks.map((chunk, index) => `[Part ${index + 1}/${chunks.length}] ${chunk}`).join("\n\n") : localText.slice(0, MAX_CONTEXT_CHARS);
 
     let extraction: PatriciaCaseExtraction | PatriciaDocumentExtraction | null = null;
     let extractionKind: "case" | "document" | "none" = "none";
 
-    if (shouldExtractCase(question, route, localText || caseHeader)) {
+    if (shouldExtractCase(effectiveQuestion, route, localText || caseHeader, skillPlan.selectedCommand.command)) {
       const extractInput = [caseHeader, context].filter(Boolean).join("\n\n");
-      const extracted = await callGroq([
-        { role: "system", content: systemPrompt(route) },
-        { role: "user", content: buildCaseExtractionPrompt(extractInput, route) },
-      ], model, { maxTokens: 2400, jsonMode: true });
+      if (extractInput.trim()) {
+        const extracted = await callGroq([
+          { role: "system", content: systemPrompt(route, skillPlan.systemAddendum) },
+          { role: "user", content: buildCaseExtractionPrompt(extractInput, route) },
+        ], model, { maxTokens: 2400, jsonMode: true });
 
-      if (!("error" in extracted)) {
-        extraction = parseLooseJson<PatriciaCaseExtraction>(extracted.content);
-        extractionKind = extraction ? "case" : "none";
+        if (!("error" in extracted)) {
+          extraction = parseLooseJson<PatriciaCaseExtraction>(extracted.content);
+          extractionKind = extraction ? "case" : "none";
+        }
       }
-    } else if (shouldExtractPublicDocument(route, localText)) {
+    } else if (shouldExtractDocument(skillPlan.selectedCommand.command, localText)) {
       const extracted = await callGroq([
-        { role: "system", content: systemPrompt(route) },
+        { role: "system", content: systemPrompt(route, skillPlan.systemAddendum) },
         { role: "user", content: buildDocumentExtractionPrompt(context, route) },
       ], model, { maxTokens: 2400, jsonMode: true });
 
@@ -316,41 +202,54 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const researchSources = researchResultsToSources(researchResults);
-    const localSources = hasLocalText ? [makeLocalDocumentSource(localText, suppliedCaseTitle || resolvedCase?.title || "User-provided source text")] : [];
-    const sources = normalizeSources([...localSources, ...researchSources]);
+    const sources: PatriciaSource[] = normalizeSources(hasLocalText ? [makeLocalDocumentSource(localText, suppliedCaseTitle || "User-provided legal/workflow material")] : []);
     const ledgerItems: PatriciaEvidenceItem[] = [
       ...(extractionKind === "case" ? buildExtractionLedger(extraction as PatriciaCaseExtraction) : []),
       ...(extractionKind === "document" ? buildDocumentLedger(extraction as PatriciaDocumentExtraction) : []),
-      ...buildSourceLedger(researchResults),
     ];
+
+    for (const missing of skillPlan.missingInputs) {
+      ledgerItems.push({
+        id: makeEvidenceId(ledgerItems.length),
+        claim: `Missing input: ${missing}`,
+        support: "The selected Claude-for-legal style skill requires this before Patricia can produce a complete legal workflow output.",
+        source: "workflow intake",
+        confidence: "high",
+        kind: "unsupported",
+        authority: "workflow",
+        risk: "high",
+      });
+    }
 
     const evidenceLedger = evidenceLedgerAsPrompt(ledgerItems);
     const preAnswerTrustScore = computeTrustScore(ledgerItems, sources);
     const preAnswerConfidence = confidenceFromTrustScore(preAnswerTrustScore);
+    const planText = JSON.stringify({ selectedSkill: skillPlan.selectedCommand, intakeChecklist: skillPlan.intakeChecklist, missingInputs: skillPlan.missingInputs }, null, 2);
+    const externalResearch = "No external legal research connector is connected in this Patricia build. Do not invent legal authorities. Mark any authority-dependent statement as requiring lawyer/source verification.";
+    const sourceQuality = hasLocalText ? "user-provided-source-only" : "no-source-document-provided";
 
     const draft = await callGroq([
-      { role: "system", content: systemPrompt(route) },
+      { role: "system", content: systemPrompt(route, skillPlan.systemAddendum) },
       {
         role: "user",
         content: buildFinalLegalAnswerPrompt({
-          question: `${question}\n\n${answerMode}\n\nPRE_ANSWER_TRUST_SCORE: ${preAnswerTrustScore}\nPRE_ANSWER_CONFIDENCE: ${preAnswerConfidence}`,
+          question: `${skillPlan.normalizedQuestion}\n\n${skillPlan.userPromptAddendum}\n\nPRE_ANSWER_TRUST_SCORE: ${preAnswerTrustScore}\nPRE_ANSWER_CONFIDENCE: ${preAnswerConfidence}`,
           caseHeader,
           planText,
-          sourceQuality: quality,
+          sourceQuality,
           extraction,
           evidenceLedger,
           externalResearch,
         }),
       },
-    ], model, { maxTokens: wantsDeepAnswer(question) && hasLocalText ? 5200 : 3400 });
+    ], model, { maxTokens: wantsDeepAnswer(effectiveQuestion) || hasLocalText ? 5200 : 3400 });
 
     if ("error" in draft) return NextResponse.json(draft, { status: draft.status || 500 });
 
     const verified = await callGroq([
-      { role: "system", content: systemPrompt(route) },
-      { role: "user", content: buildVerificationPrompt(draft.content, `${answerMode}\n\nTRUST SCORE: ${preAnswerTrustScore}\nCONFIDENCE: ${preAnswerConfidence}\n\n${evidenceLedger}`) },
-    ], model, { maxTokens: wantsDeepAnswer(question) && hasLocalText ? 4200 : 2800 });
+      { role: "system", content: systemPrompt(route, skillPlan.systemAddendum) },
+      { role: "user", content: buildVerificationPrompt(draft.content, `${skillPlan.userPromptAddendum}\n\nTRUST SCORE: ${preAnswerTrustScore}\nCONFIDENCE: ${preAnswerConfidence}\n\n${evidenceLedger}`) },
+    ], model, { maxTokens: wantsDeepAnswer(effectiveQuestion) || hasLocalText ? 4200 : 2800 });
 
     const content = "error" in verified ? draft.content : verified.content;
     const contract = buildPatriciaAnswerContract({ route, answer: content, evidenceLedger: ledgerItems, sources, unsupportedClaims: [] });
@@ -358,14 +257,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       content,
       route,
-      answerMode: route.task,
-      sourceQuality: quality,
+      skill: {
+        command: skillPlan.selectedCommand.command,
+        plugin: skillPlan.selectedCommand.plugin,
+        agent: skillPlan.selectedCommand.agent,
+        stage: skillPlan.selectedCommand.stage,
+        risk: skillPlan.selectedCommand.risk,
+        missingInputs: skillPlan.missingInputs,
+        intakeChecklist: skillPlan.intakeChecklist,
+      },
+      answerMode: skillPlan.selectedCommand.command,
+      sourceQuality,
       trustScore: contract.trustScore,
       confidence: contract.confidence,
       releaseSafe: contract.releaseSafe,
       shouldAbstain: shouldAbstain(contract),
-      resolvedCase: resolvedCase ? { title: resolvedCase.title, sourceUrl: resolvedCase.sourceUrl } : null,
-      researchPlan: plan,
+      researchPlan: { selectedSkill: skillPlan.selectedCommand.command, missingInputs: skillPlan.missingInputs },
       extractionKind,
       extraction,
       evidenceLedger: ledgerItems,
