@@ -3,6 +3,7 @@
 import { ArrowUp, Check, Copy, Edit3, FileText, Loader2, MessageSquare, Paperclip, Plus, Scale, Share2, Sparkles, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ClaudeCommandPanel } from "@/components/patricia/claude-command-panel";
 import { getPatriciaCases, PatriciaCaseRecord } from "@/lib/patricia-storage";
 import { PATRICIA_LEGAL_COMMANDS } from "@/lib/patricia-skills/registry";
 import {
@@ -17,7 +18,7 @@ import {
 } from "@/lib/patricia-chat-sessions";
 
 const MAX_CONTEXT_CHARS = 60_000;
-const QUICK_COMMANDS = PATRICIA_LEGAL_COMMANDS.slice(0, 12);
+const QUICK_COMMANDS = PATRICIA_LEGAL_COMMANDS.slice(0, 6);
 
 function cleanVisibleAnswer(value: string) {
   return value.replace(/^#{1,6}\s+/gm, "").replace(/^Sources returned[\s\S]*$/im, "").replace(/\n{3,}/g, "\n\n").trim();
@@ -100,10 +101,10 @@ export function PatriciaChat() {
     setInput("");
     setError("");
     setIsSending(true);
-    setResearchStage("Loading selected legal skill...");
+    setResearchStage("Loading Claude-for-legal source...");
 
     try {
-      setResearchStage(`${activeCommand?.agent || "Legal agent"} is checking task inputs...`);
+      setResearchStage(`${activeCommand?.agent || "Workflow agent"} is checking task inputs...`);
       const response = await fetch("/api/patricia/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -160,9 +161,9 @@ export function PatriciaChat() {
       <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col overflow-hidden px-4 pt-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">Claude-for-legal workflow</p>
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">Claude-for-legal source brain</p>
             <h1 className="truncate text-lg font-semibold text-slate-900">{session?.title || "New legal workflow"}</h1>
-            {activeCommand && <p className="mt-1 truncate text-xs text-slate-500">{activeCommand.command} · {activeCommand.agent}</p>}
+            {activeCommand && <p className="mt-1 truncate text-xs text-slate-500">{activeCommand.command} · {activeCommand.agent} · {activeCommand.sourcePath}</p>}
           </div>
           <div className="flex gap-2">
             <button type="button" onClick={startNewChat} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"><Plus size={14} /> New chat</button>
@@ -170,24 +171,22 @@ export function PatriciaChat() {
           </div>
         </div>
 
-        <div className="mb-3 flex gap-2 overflow-x-auto pb-2">
-          {QUICK_COMMANDS.map((command) => <button key={command.command} type="button" onClick={() => useCommand(command.command, command.promptFrame)} className={`flex-shrink-0 rounded-full border px-3 py-2 text-xs font-medium transition ${selectedCommand === command.command ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>{command.userButton}</button>)}
-        </div>
+        <ClaudeCommandPanel selectedCommand={selectedCommand} onSelect={useCommand} />
 
         <div className="flex-1 overflow-y-auto px-1 py-4">
           {messages.length === 0 ? (
             <div className="flex min-h-full flex-col items-center justify-center text-center">
               <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm"><Scale size={24} className="text-slate-900" /></div>
               <h2 className="mb-3 text-3xl font-semibold leading-tight tracking-tight text-slate-900">Patricia Legal Workflows</h2>
-              <p className="mx-auto mb-8 max-w-2xl text-sm leading-6 text-slate-500">Pick a Claude-for-legal style command, attach a document when needed, then run a structured workflow with intake checks, draft output, trust score, and review warning.</p>
+              <p className="mx-auto mb-8 max-w-2xl text-sm leading-6 text-slate-500">Patricia owns the interface, documents, audio, storage, and orchestration. Claude-for-legal source files run the workflow brain. Choose a mode, attach a document when needed, and make missing inputs visible.</p>
               <div className="grid w-full max-w-[900px] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {QUICK_COMMANDS.slice(0, 6).map((command) => <SuggestionCard key={command.command} title={command.userButton} sub={command.shortDescription} onClick={() => useCommand(command.command, command.promptFrame)} />)}
+                {QUICK_COMMANDS.map((command) => <SuggestionCard key={command.command} title={command.userButton} sub={command.shortDescription} onClick={() => useCommand(command.command, command.promptFrame)} />)}
               </div>
             </div>
           ) : (
             <div className="space-y-6 pb-4">
               {messages.map((message) => <MessageBubble key={message.id} message={message} onUpdate={updateMessageContent} />)}
-              {isSending && <div className="flex items-start gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-white"><Loader2 size={15} className="animate-spin" /></div><div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500 shadow-sm"><p className="font-medium text-slate-700">Patricia is running the selected workflow...</p><p className="mt-1 text-xs">{researchStage || "Preparing answer..."}</p></div></div>}
+              {isSending && <div className="flex items-start gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-white"><Loader2 size={15} className="animate-spin" /></div><div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500 shadow-sm"><p className="font-medium text-slate-700">Patricia is running the selected source workflow...</p><p className="mt-1 text-xs">{researchStage || "Preparing answer..."}</p></div></div>}
               <div ref={bottomRef} />
             </div>
           )}
@@ -209,7 +208,7 @@ export function PatriciaChat() {
 
           <div className="flex items-center justify-between px-4 pb-2 text-[11px] font-light text-slate-400">
             <Link href="/documents" className="flex items-center gap-1 hover:text-slate-700"><FileText size={13} /> Add document text</Link>
-            <span>{error || "Draft for review. Patricia will not pretend missing sources exist."}</span>
+            <span>{error || "Draft for review. Missing documents and connectors are shown instead of faked."}</span>
           </div>
         </form>
       </div>
