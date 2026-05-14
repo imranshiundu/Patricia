@@ -1,10 +1,11 @@
 "use client";
 
-import { Loader2, Plus, Scale, Trash2 } from "lucide-react";
+import { FileText, Loader2, Mic, Plus, Server, Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { PatriciaChatComposer } from "@/components/patricia/chat-composer";
 import { PatriciaChatMessageCard } from "@/components/patricia/chat-message";
 import { ClaudeCommandPanel } from "@/components/patricia/claude-command-panel";
+import { PatriciaSystemStatusStrip } from "@/components/patricia/system-status-strip";
 import { getPatriciaCases, PatriciaCaseRecord } from "@/lib/patricia-storage";
 import { PATRICIA_LEGAL_COMMANDS } from "@/lib/patricia-skills/registry";
 import { cleanVisibleAnswer } from "@/lib/patricia-output";
@@ -105,31 +106,49 @@ export function PatriciaChat() {
   function startNewChat() { setSession(createChatSession()); setInput(""); setError(""); }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white">
-      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col overflow-hidden px-4 pt-5">
-        <div className="mb-4 flex items-center justify-between gap-3">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white text-slate-950">
+      <div className="border-b border-slate-100 bg-white px-4 py-4">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
-            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">Claude-for-legal source workflows</p>
-            <h1 className="truncate text-lg font-semibold text-slate-900">{session?.title || "New workflow"}</h1>
-            {activeCommand && <p className="mt-1 truncate text-xs text-slate-500">{activeCommand.command} · {activeCommand.agent} · {activeCommand.sourcePath}</p>}
+            <p className="text-[11px] font-medium uppercase tracking-[0.24em] text-slate-400">Patricia server-backed legal OS</p>
+            <h1 className="mt-1 truncate text-2xl font-semibold tracking-tight text-slate-950">{session?.title || "New workflow"}</h1>
+            {activeCommand && <p className="mt-1 truncate text-xs text-slate-500">{activeCommand.command} · {activeCommand.agent}</p>}
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-3 py-2 text-xs font-medium text-white"><Server size={14} /> Server-ready</button>
+            <button type="button" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600"><Mic size={14} /> Audio next</button>
             <button type="button" onClick={startNewChat} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"><Plus size={14} /> New chat</button>
             <button type="button" onClick={clearCurrentChat} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-800"><Trash2 size={14} /> Delete</button>
           </div>
         </div>
-        <ClaudeCommandPanel selectedCommand={selectedCommand} onSelect={useCommand} />
-        <div className="flex-1 overflow-y-auto px-1 py-4">
-          {messages.length === 0 ? <EmptyState onSelect={useCommand} /> : <div className="space-y-6 pb-4">{messages.map((message) => <PatriciaChatMessageCard key={message.id} message={message} onUpdate={updateMessageContent} />)}{isSending && <div className="flex items-start gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-white"><Loader2 size={15} className="animate-spin" /></div><div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500 shadow-sm"><p className="font-medium text-slate-700">Patricia is running the selected workflow...</p><p className="mt-1 text-xs">{researchStage || "Preparing answer..."}</p></div></div>}<div ref={bottomRef} /></div>}
-        </div>
       </div>
-      <div className="mx-auto w-full max-w-6xl flex-shrink-0 px-4 pb-5 pt-2"><PatriciaChatComposer input={input} setInput={setInput} selectedCommand={selectedCommand} setSelectedCommand={setSelectedCommand} cases={cases} selectedCaseId={selectedCaseId} setSelectedCaseId={setSelectedCaseId} isSending={isSending} error={error} onSubmit={submitMessage} /></div>
+
+      <PatriciaSystemStatusStrip />
+
+      <div className="mx-auto grid w-full max-w-7xl flex-1 grid-cols-1 gap-4 overflow-hidden px-4 py-4 xl:grid-cols-[420px_1fr]">
+        <aside className="min-h-0 overflow-y-auto">
+          <ClaudeCommandPanel selectedCommand={selectedCommand} onSelect={useCommand} />
+        </aside>
+
+        <main className="flex min-h-0 flex-col overflow-hidden rounded-[1.7rem] border border-slate-200 bg-slate-50/60">
+          <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 text-xs text-slate-500">
+            <span className="truncate">Selected source: {activeCommand?.sourcePath || "none"}</span>
+            <span className="shrink-0">{messages.length} messages</span>
+          </div>
+          <div className="flex-1 overflow-y-auto px-4 py-5">
+            {messages.length === 0 ? <EmptyState onSelect={useCommand} /> : <div className="space-y-6 pb-4">{messages.map((message) => <PatriciaChatMessageCard key={message.id} message={message} onUpdate={updateMessageContent} />)}{isSending && <div className="flex items-start gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-white"><Loader2 size={15} className="animate-spin" /></div><div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500 shadow-sm"><p className="font-medium text-slate-700">Server runner is executing the selected workflow...</p><p className="mt-1 text-xs">{researchStage || "Preparing answer..."}</p></div></div>}<div ref={bottomRef} /></div>}
+          </div>
+          <div className="border-t border-slate-200 bg-white p-3">
+            <PatriciaChatComposer input={input} setInput={setInput} selectedCommand={selectedCommand} setSelectedCommand={setSelectedCommand} cases={cases} selectedCaseId={selectedCaseId} setSelectedCaseId={setSelectedCaseId} isSending={isSending} error={error} onSubmit={submitMessage} />
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
 
 function EmptyState({ onSelect }: { onSelect: (command: string, prompt: string) => void }) {
-  return <div className="flex min-h-full flex-col items-center justify-center text-center"><div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm"><Scale size={24} className="text-slate-900" /></div><h2 className="mb-3 text-3xl font-semibold leading-tight tracking-tight text-slate-900">Patricia Workflows</h2><p className="mx-auto mb-8 max-w-2xl text-sm leading-6 text-slate-500">Patricia owns the interface, documents, storage, audio, and orchestration. Claude-for-legal source files run the workflow layer. Choose a mode, attach a document where needed, and keep missing inputs visible.</p><div className="grid w-full max-w-[900px] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{QUICK_COMMANDS.map((command) => <SuggestionCard key={command.command} title={command.userButton} sub={command.shortDescription} onClick={() => onSelect(command.command, command.promptFrame)} />)}</div></div>;
+  return <div className="flex min-h-full flex-col items-center justify-center rounded-[1.4rem] bg-white px-6 py-10 text-center"><div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm"><FileText size={24} className="text-slate-900" /></div><h2 className="mb-3 text-3xl font-semibold leading-tight tracking-tight text-slate-900">Run legal work through Claude-for-legal.</h2><p className="mx-auto mb-8 max-w-2xl text-sm leading-6 text-slate-500">Patricia is now the server-backed product shell. The old Patricia legal logic is retired. Pick a workflow, attach facts or a document, then let the backend runner execute the selected Claude-for-legal source.</p><div className="grid w-full max-w-[900px] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{QUICK_COMMANDS.map((command) => <SuggestionCard key={command.command} title={command.userButton} sub={command.shortDescription} onClick={() => onSelect(command.command, command.promptFrame)} />)}</div></div>;
 }
 
 function SuggestionCard({ title, sub, onClick }: { title: string; sub: string; onClick: () => void }) {
