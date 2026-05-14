@@ -1,16 +1,34 @@
 export type PatriciaChatRole = "user" | "assistant" | "system";
 
+export type PatriciaMessageSource = {
+  title: string;
+  url?: string;
+  authority?: string;
+  sourceName?: string;
+  documentType?: string;
+  jurisdiction?: string;
+};
+
+export type PatriciaSkillMeta = {
+  command?: string;
+  plugin?: string;
+  agent?: string;
+  stage?: string;
+  sourceQuality?: string;
+  trustScore?: number;
+  confidence?: string;
+  releaseSafe?: boolean;
+  shouldAbstain?: boolean;
+  missingInputs?: string[];
+};
+
 export type PatriciaChatMessage = {
   id: string;
   role: PatriciaChatRole;
   content: string;
   createdAt: string;
-  sources?: Array<{
-    title: string;
-    url: string;
-    authority?: string;
-    sourceName?: string;
-  }>;
+  sources?: PatriciaMessageSource[];
+  skill?: PatriciaSkillMeta;
 };
 
 export type PatriciaChatSession = {
@@ -18,6 +36,7 @@ export type PatriciaChatSession = {
   title: string;
   messages: PatriciaChatMessage[];
   selectedCaseId?: string;
+  selectedCommand?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -66,7 +85,7 @@ export function setActiveChatSessionId(id: string) {
   window.dispatchEvent(new CustomEvent("patricia:active-chat-session-updated", { detail: id }));
 }
 
-export function createChatSession(title = "New legal research chat") {
+export function createChatSession(title = "New legal workflow") {
   const now = new Date().toISOString();
   const session: PatriciaChatSession = {
     id: makePatriciaId("chat"),
@@ -115,7 +134,7 @@ export function deleteChatSession(id: string) {
 }
 
 export function titleFromQuestion(question: string) {
-  const clean = question.replace(/\s+/g, " ").trim();
-  if (!clean) return "New legal research chat";
+  const clean = question.replace(/^\/[a-z-]+:[a-z-]+\s*/i, "").replace(/\s+/g, " ").trim();
+  if (!clean) return "New legal workflow";
   return clean.length > 48 ? `${clean.slice(0, 48)}…` : clean;
 }
