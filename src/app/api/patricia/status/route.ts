@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { PATRICIA_SOURCES } from "@/lib/patricia-research";
+import { availableProviders } from "@/lib/llm-client";
 
 export async function GET() {
   const sourcesByAuthority = PATRICIA_SOURCES.reduce<Record<string, number>>((accumulator, source) => {
@@ -15,9 +16,12 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     ai: {
-      provider: "groq",
-      model: process.env.GROQ_MODEL || "llama-3.1-8b-instant",
-      apiKeyConfigured: Boolean(process.env.GROQ_API_KEY),
+      providers: availableProviders(),
+      models: {
+        groq: process.env.GROQ_MODEL || null,
+        openai: process.env.OPENAI_MODEL || null,
+        anthropic: process.env.ANTHROPIC_MODEL || null,
+      },
     },
     runtime: {
       storage: "browser-localStorage",
