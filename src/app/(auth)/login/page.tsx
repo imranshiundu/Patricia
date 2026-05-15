@@ -1,4 +1,4 @@
-import { Sparkles, ArrowRight } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import Link from "next/link";
 
 export default function LoginPage() {
@@ -57,7 +57,7 @@ export default function LoginPage() {
             </div>
             
             <div className="mt-6 flex items-center justify-center">
-               <span className="text-sm text-slate-500 font-medium">Don't have an account? <Link href="/signup" className="text-blue-600 font-bold hover:underline transition-colors">Sign up</Link></span>
+               <span className="text-sm text-slate-500 font-medium">Don&apos;t have an account? <Link href="/signup" className="text-blue-600 font-bold hover:underline transition-colors">Sign up</Link></span>
             </div>
           </form>
         </div>

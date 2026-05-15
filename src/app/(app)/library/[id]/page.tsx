@@ -1,10 +1,10 @@
 "use client";
 
-import { Sparkles, ArrowLeft, Play, Bookmark, Share2, Download, DownloadCloud, ChevronDown } from "lucide-react";
+import { Sparkles, ArrowLeft, Play, Bookmark, Share2, DownloadCloud, ChevronDown } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
-export default function CaseDetailPage({ params }: { params: { id: string } }) {
+export default function CaseDetailPage() {
   const [openSection, setOpenSection] = useState("ruling"); // default open
 
   return (
@@ -65,7 +65,7 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
                  isOpen={openSection === 'facts'} 
                  onClick={() => setOpenSection(openSection === 'facts' ? '' : 'facts')}
              >
-                 The respondents challenged the IEBC's declaration that presidential election results announced at the constituency level by returning officers are provisional and subject to confirmation by the National Tallying Centre. They argued this violated the Constitution which intended for decentralized, transparent electoral processes.
+                 The respondents challenged the IEBC&apos;s declaration that presidential election results announced at the constituency level by returning officers are provisional and subject to confirmation by the National Tallying Centre. They argued this violated the Constitution which intended for decentralized, transparent electoral processes.
              </AccordionItem>
              
              <AccordionItem 
@@ -85,7 +85,7 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
                  isOpen={openSection === 'ruling'} 
                  onClick={() => setOpenSection(openSection === 'ruling' ? '' : 'ruling')}
              >
-                 The Supreme Court upheld the Court of Appeal's decision. It ruled that the results declared at the constituency tallying centers are final and cannot be altered, varied, or verified by the National Tallying Centre or the IEBC Chairperson. The Chairperson's role is strictly limited to tallying the already verified results from the 290 constituencies and declaring the final outcome. Any errors can only be challenged in an election court (the Supreme Court).
+                 The Supreme Court upheld the Court of Appeal&apos;s decision. It ruled that the results declared at the constituency tallying centers are final and cannot be altered, varied, or verified by the National Tallying Centre or the IEBC Chairperson. The Chairperson&apos;s role is strictly limited to tallying the already verified results from the 290 constituencies and declaring the final outcome. Any errors can only be challenged in an election court (the Supreme Court).
              </AccordionItem>
 
              <AccordionItem 
@@ -93,7 +93,7 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
                  isOpen={openSection === 'precedent'} 
                  onClick={() => setOpenSection(openSection === 'precedent' ? '' : 'precedent')}
              >
-                 This case is a landmark ruling establishing the decentralization of the electoral process in Kenya. It entrenched the principle that "voting, counting, tallying, and declaration of results at the constituency level is final," drastically reducing the potential for centralized electoral fraud during final tallying.
+                 This case is a landmark ruling establishing the decentralization of the electoral process in Kenya. It entrenched the principle that &quot;voting, counting, tallying, and declaration of results at the constituency level is final,&quot; drastically reducing the potential for centralized electoral fraud during final tallying.
              </AccordionItem>
           </div>
       </div>
@@ -106,7 +106,14 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
   );
 }
 
-function AccordionItem({ title, isOpen, onClick, children }: any) {
+type AccordionItemProps = {
+  title: string;
+  isOpen: boolean;
+  onClick: () => void;
+  children: ReactNode;
+};
+
+function AccordionItem({ title, isOpen, onClick, children }: AccordionItemProps) {
     return (
         <div className="cursor-pointer">
             <div className="px-6 py-5 flex items-center justify-between hover:bg-slate-50 transition-colors" onClick={onClick}>

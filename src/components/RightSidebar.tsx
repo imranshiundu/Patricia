@@ -17,6 +17,14 @@ type PatriciaCase = {
 
 const CASES_KEY = "patricia:cases";
 
+type CaseCardProps = {
+  title?: string;
+  sub?: string;
+  tag?: string;
+  duration?: string;
+  active?: boolean;
+};
+
 function readStoredCases(): PatriciaCase[] {
   if (typeof window === "undefined") return [];
 
@@ -109,7 +117,7 @@ export function RightSidebar() {
   );
 }
 
-function CaseCard({ title, sub, tag, duration, active }: any) {
+function CaseCard({ title, sub, tag, duration, active }: CaseCardProps) {
   return (
     <div
       className={`group flex items-stretch gap-3 p-3.5 rounded-2xl cursor-pointer transition-all active:scale-[0.99] ${
