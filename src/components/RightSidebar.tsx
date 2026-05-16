@@ -101,7 +101,7 @@ export function RightSidebar() {
 
       <div className="px-5 pb-6 pt-4 border-t border-slate-200/70 bg-white/60 backdrop-blur-sm rounded-b-[32px]">
         <Link
-          href="/documents"
+          href="/cases"
           className="flex items-center gap-3 w-full bg-slate-900 text-white px-5 py-3.5 rounded-2xl hover:bg-slate-800 active:scale-[0.98] transition-all shadow-sm group"
         >
           <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center">

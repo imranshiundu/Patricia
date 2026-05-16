@@ -253,7 +253,7 @@ async function fetchWithTimeout(url: string, timeoutMs = 9000) {
       const text = await response.text();
       if (!text || text.length < 120) return "";
       return text;
-    } catch (err) {
+    } catch {
       // Abort or network error — retry with backoff for transient issues
       if (attempt < maxAttempts) {
         await new Promise((r) => setTimeout(r, 250 * attempt));

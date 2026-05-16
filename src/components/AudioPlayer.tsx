@@ -33,9 +33,12 @@ export function AudioPlayer({ track }: { track?: AudioTrack }) {
   const [duration, setDuration] = useState(track?.durationSeconds ?? 0);
 
   useEffect(() => {
-    setIsPlaying(false);
-    setCurrentTime(0);
-    setDuration(track?.durationSeconds ?? 0);
+    const handle = window.setTimeout(() => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+      setDuration(track?.durationSeconds ?? 0);
+    }, 0);
+    return () => window.clearTimeout(handle);
   }, [track?.id, track?.audioUrl, track?.durationSeconds]);
 
   const progress = useMemo(() => {

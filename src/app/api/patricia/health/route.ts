@@ -10,7 +10,7 @@ export async function GET() {
     app: "Patricia",
     backendMode: "server-ready",
     runtime: "nodejs",
-    workflowBrain: "anthropics/claude-for-legal",
+    workflowBrain: "Patricia Brain",
     orchestration: "patricia-server",
     llm,
     releaseReady: llm.configured,

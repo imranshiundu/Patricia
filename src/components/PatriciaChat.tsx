@@ -1,17 +1,17 @@
 "use client";
 
-import { FileText, Loader2, Mic, Plus, Server, Trash2 } from "lucide-react";
+import { FileText, Loader2, Plus, Server, Trash2, Settings, AlertTriangle, PanelRight } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { PatriciaChatComposer } from "@/components/patricia/chat-composer";
 import { PatriciaChatMessageCard } from "@/components/patricia/chat-message";
-import { ClaudeCommandPanel } from "@/components/patricia/claude-command-panel";
-import { PatriciaSystemStatusStrip } from "@/components/patricia/system-status-strip";
+import { BrainCommandPanel } from "@/components/patricia/brain-command-panel";
 import { getPatriciaCases, PatriciaCaseRecord } from "@/lib/patricia-storage";
 import { PATRICIA_LEGAL_COMMANDS } from "@/lib/patricia-skills/registry";
 import { cleanVisibleAnswer } from "@/lib/patricia-output";
 import { createChatSession, deleteChatSession, getOrCreateActiveSession, makePatriciaId, PatriciaChatMessage, PatriciaChatSession, titleFromQuestion, upsertChatSession } from "@/lib/patricia-chat-sessions";
 
-const MAX_CONTEXT_CHARS = 60000;
+const MAX_CONTEXT_CHARS = 400000;
 const QUICK_COMMANDS = PATRICIA_LEGAL_COMMANDS.slice(0, 6);
 
 export function PatriciaChat() {
@@ -23,6 +23,8 @@ export function PatriciaChat() {
   const [isSending, setIsSending] = useState(false);
   const [researchStage, setResearchStage] = useState("");
   const [error, setError] = useState("");
+  const [isConfigured, setIsConfigured] = useState<boolean | null>(null);
+  const [showContextPanel, setShowContextPanel] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const messages = session?.messages || [];
   const activeCommand = useMemo(() => PATRICIA_LEGAL_COMMANDS.find((item) => item.command === selectedCommand) || QUICK_COMMANDS[0], [selectedCommand]);
@@ -52,6 +54,13 @@ export function PatriciaChat() {
       window.removeEventListener("patricia:active-chat-session-updated", syncSession);
       window.removeEventListener("storage", syncCases);
     };
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/patricia/status", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => setIsConfigured(Boolean(data?.ai?.providers?.groq || data?.ai?.providers?.openai || data?.ai?.providers?.anthropic || data?.ai?.apiKeyConfigured)))
+      .catch(() => setIsConfigured(false));
   }, []);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages.length, isSending]);
@@ -101,56 +110,124 @@ export function PatriciaChat() {
     }
   }
 
-  function useCommand(command: string, prompt: string) { setSelectedCommand(command); setInput(prompt); if (session) upsertChatSession({ ...session, selectedCommand: command }); }
   function clearCurrentChat() { if (!session) return; deleteChatSession(session.id); setSession(createChatSession()); setError(""); }
   function startNewChat() { setSession(createChatSession()); setInput(""); setError(""); }
 
+  function handleCommandSelect(command: string) {
+    setSelectedCommand(command);
+    if (window.innerWidth < 1024) setShowContextPanel(false);
+  }
+
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white text-slate-950">
-      <div className="border-b border-slate-100 bg-white px-4 py-4">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <div className="flex h-full min-h-0 bg-background overflow-hidden">
+      <main className="mx-auto flex w-full max-w-4xl min-h-0 flex-1 flex-col overflow-hidden px-4 sm:px-6">
+        
+        {/* Simplified Header */}
+        <div className="flex shrink-0 items-center justify-between py-6">
           <div className="min-w-0">
-            <p className="text-[11px] font-medium uppercase tracking-[0.24em] text-slate-400">Patricia server-backed legal OS</p>
-            <h1 className="mt-1 truncate text-2xl font-semibold tracking-tight text-slate-950">{session?.title || "New workflow"}</h1>
-            {activeCommand && <p className="mt-1 truncate text-xs text-slate-500">{activeCommand.command} · {activeCommand.agent}</p>}
+            <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">{session?.title || "New workflow"}</h1>
+            <p className="mt-1 flex items-center gap-2 text-xs text-foreground-muted">
+              <Server size={12} className="text-accent" /> Server-backed session
+            </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-3 py-2 text-xs font-medium text-white"><Server size={14} /> Server-ready</button>
-            <button type="button" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600"><Mic size={14} /> Audio next</button>
-            <button type="button" onClick={startNewChat} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"><Plus size={14} /> New chat</button>
-            <button type="button" onClick={clearCurrentChat} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-800"><Trash2 size={14} /> Delete</button>
+          
+          <div className="flex shrink-0 items-center gap-2">
+            <button type="button" onClick={startNewChat} className="flex h-9 items-center justify-center gap-2 rounded-full border border-border bg-panel px-4 text-xs font-medium text-foreground transition-colors hover:bg-panel-elevated"><Plus size={14} /> <span className="hidden sm:inline">New Chat</span></button>
+            <button type="button" onClick={clearCurrentChat} className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-panel text-foreground-muted transition-colors hover:bg-panel-elevated hover:text-foreground"><Trash2 size={14} /></button>
+            <button type="button" onClick={() => setShowContextPanel(!showContextPanel)} className={`flex h-9 w-9 items-center justify-center rounded-full border border-border transition-colors ${showContextPanel ? 'bg-foreground text-background' : 'bg-panel text-foreground-muted hover:bg-panel-elevated hover:text-foreground'}`}><PanelRight size={14} /></button>
           </div>
         </div>
-      </div>
 
-      <PatriciaSystemStatusStrip />
+        {/* Persistent Warning Banner */}
+        {isConfigured === false && (
+          <div className="shrink-0 mb-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-red-500">
+              <AlertTriangle size={16} className="shrink-0" />
+              <span>No server LLM provider configured. Patricia cannot run workflows.</span>
+            </div>
+            <Link href="/settings" className="shrink-0 text-sm font-semibold text-red-500 hover:text-red-600 transition flex items-center gap-1">
+              Configure now <span aria-hidden="true">&rarr;</span>
+            </Link>
+          </div>
+        )}
 
-      <div className="mx-auto grid w-full max-w-7xl flex-1 grid-cols-1 gap-4 overflow-hidden px-4 py-4 xl:grid-cols-[420px_1fr]">
-        <aside className="min-h-0 overflow-y-auto">
-          <ClaudeCommandPanel selectedCommand={selectedCommand} onSelect={useCommand} />
+        {/* Chat Messages Area */}
+        <div className="flex-1 overflow-y-auto px-1 py-4">
+          {messages.length === 0 ? (
+            <EmptyState isConfigured={isConfigured} />
+          ) : (
+            <div className="space-y-6 pb-4">
+              {messages.map((message) => <PatriciaChatMessageCard key={message.id} message={message} onUpdate={updateMessageContent} />)}
+              {isSending && (
+                <div className="flex items-start gap-4">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-sm">
+                    <Loader2 size={15} className="animate-spin" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <p className="text-sm font-medium text-foreground">Patricia is executing workflow...</p>
+                    <p className="text-xs text-foreground-muted">{researchStage || "Preparing response..."}</p>
+                  </div>
+                </div>
+              )}
+              <div ref={bottomRef} />
+            </div>
+          )}
+        </div>
+
+        {/* Composer */}
+        <div className="shrink-0 pb-6 pt-2">
+          <PatriciaChatComposer 
+            input={input} 
+            setInput={setInput} 
+            selectedCommand={selectedCommand} 
+            setSelectedCommand={setSelectedCommand} 
+            cases={cases} 
+            selectedCaseId={selectedCaseId} 
+            setSelectedCaseId={setSelectedCaseId} 
+            isSending={isSending} 
+            error={error} 
+            onSubmit={submitMessage} 
+          />
+        </div>
+      </main>
+
+      {showContextPanel && (
+        <aside className="w-80 shrink-0 border-l border-border bg-background p-4 flex flex-col min-h-0 hidden lg:flex">
+          <BrainCommandPanel selectedCommand={selectedCommand} onSelect={handleCommandSelect} />
         </aside>
-
-        <main className="flex min-h-0 flex-col overflow-hidden rounded-[1.7rem] border border-slate-200 bg-slate-50/60">
-          <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 text-xs text-slate-500">
-            <span className="truncate">Selected source: {activeCommand?.sourcePath || "none"}</span>
-            <span className="shrink-0">{messages.length} messages</span>
-          </div>
-          <div className="flex-1 overflow-y-auto px-4 py-5">
-            {messages.length === 0 ? <EmptyState onSelect={useCommand} /> : <div className="space-y-6 pb-4">{messages.map((message) => <PatriciaChatMessageCard key={message.id} message={message} onUpdate={updateMessageContent} />)}{isSending && <div className="flex items-start gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-white"><Loader2 size={15} className="animate-spin" /></div><div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500 shadow-sm"><p className="font-medium text-slate-700">Server runner is executing the selected workflow...</p><p className="mt-1 text-xs">{researchStage || "Preparing answer..."}</p></div></div>}<div ref={bottomRef} /></div>}
-          </div>
-          <div className="border-t border-slate-200 bg-white p-3">
-            <PatriciaChatComposer input={input} setInput={setInput} selectedCommand={selectedCommand} setSelectedCommand={setSelectedCommand} cases={cases} selectedCaseId={selectedCaseId} setSelectedCaseId={setSelectedCaseId} isSending={isSending} error={error} onSubmit={submitMessage} />
-          </div>
-        </main>
-      </div>
+      )}
     </div>
   );
 }
 
-function EmptyState({ onSelect }: { onSelect: (command: string, prompt: string) => void }) {
-  return <div className="flex min-h-full flex-col items-center justify-center rounded-[1.4rem] bg-white px-6 py-10 text-center"><div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm"><FileText size={24} className="text-slate-900" /></div><h2 className="mb-3 text-3xl font-semibold leading-tight tracking-tight text-slate-900">Run legal work through Claude-for-legal.</h2><p className="mx-auto mb-8 max-w-2xl text-sm leading-6 text-slate-500">Patricia is now the server-backed product shell. The old Patricia legal logic is retired. Pick a workflow, attach facts or a document, then let the backend runner execute the selected Claude-for-legal source.</p><div className="grid w-full max-w-[900px] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{QUICK_COMMANDS.map((command) => <SuggestionCard key={command.command} title={command.userButton} sub={command.shortDescription} onClick={() => onSelect(command.command, command.promptFrame)} />)}</div></div>;
-}
+function EmptyState({ isConfigured }: { isConfigured: boolean | null }) {
+  if (isConfigured === false) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center text-center">
+        <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-panel text-red-500 shadow-sm border border-red-500/20">
+          <AlertTriangle size={24} />
+        </div>
+        <h2 className="mb-2 text-2xl font-semibold tracking-tight text-foreground">LLM Not Configured</h2>
+        <p className="max-w-md text-sm text-foreground-muted leading-relaxed mb-6">
+          Patricia needs an active LLM provider to execute legal workflows. 
+          Configure your server API keys in the environment to get started.
+        </p>
+        <Link href="/settings" className="inline-flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-accent-foreground shadow-md transition hover:opacity-90">
+          <Settings size={16} /> Check System Settings
+        </Link>
+      </div>
+    );
+  }
 
-function SuggestionCard({ title, sub, onClick }: { title: string; sub: string; onClick: () => void }) {
-  return <button type="button" onClick={onClick} className="rounded-2xl border border-slate-200 bg-white p-4 text-left transition-colors hover:bg-slate-50 active:scale-[0.99]"><h4 className="mb-1 text-[13px] font-medium text-slate-800">{title}</h4><p className="line-clamp-2 text-[12px] font-light text-slate-500">{sub}</p></button>;
+  return (
+    <div className="flex h-full flex-col items-center justify-center text-center">
+      <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-panel text-foreground-muted shadow-sm border border-border">
+        <FileText size={24} />
+      </div>
+      <h2 className="mb-2 text-2xl font-semibold tracking-tight text-foreground">Patricia AI Assistant</h2>
+      <p className="max-w-md text-sm text-foreground-muted leading-relaxed">
+        Ask Patricia anything or provide a document. Patricia automatically routes your query and can assist with legal tasks, data analysis, accounting, or studying.
+      </p>
+    </div>
+  );
 }

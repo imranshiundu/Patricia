@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { LayoutDashboard, Users, Database, Settings2, LogOut, ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 
@@ -75,7 +76,14 @@ export default function AdminDashboardPage() {
   );
 }
 
-function NavItem({ icon, label, count, active }: any) {
+type NavItemProps = {
+  icon: ReactNode;
+  label: string;
+  count?: number;
+  active?: boolean;
+};
+
+function NavItem({ icon, label, count, active }: NavItemProps) {
     return (
         <button className={`w-full flex items-center justify-between p-3 rounded-xl transition-colors font-medium ${active ? 'bg-blue-500 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
             <span className="flex items-center gap-3">
@@ -88,7 +96,13 @@ function NavItem({ icon, label, count, active }: any) {
     )
 }
 
-function StatCard({ label, value, change }: any) {
+type StatCardProps = {
+  label: string;
+  value: string;
+  change: string;
+};
+
+function StatCard({ label, value, change }: StatCardProps) {
     return (
         <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm hover:shadow transition-shadow">
             <h3 className="text-slate-500 font-bold text-sm mb-4 uppercase tracking-wider">{label}</h3>
@@ -102,7 +116,13 @@ function StatCard({ label, value, change }: any) {
     )
 }
 
-function TableRow({ id, citation, confidence }: any) {
+type TableRowProps = {
+  id: string;
+  citation: string;
+  confidence: number;
+};
+
+function TableRow({ id, citation, confidence }: TableRowProps) {
     return (
         <tr className="hover:bg-slate-50 transition-colors group">
             <td className="py-4 px-6 text-sm font-bold font-mono text-slate-500">{id}</td>

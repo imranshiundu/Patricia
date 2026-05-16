@@ -22,7 +22,7 @@ export async function callLlm(messages: GroqMessage[], options?: { model?: strin
     if (!groqKey) return { error: "GROQ_API_KEY missing.", status: 500 };
     const url = process.env.GROQ_API_URL || "https://api.groq.com/openai/v1/chat/completions";
     const model = options?.model || process.env.GROQ_MODEL || "llama-3.1-8b-instant";
-    const body: any = { model, messages, temperature: 0.05, max_tokens: options?.maxTokens ?? 2400 };
+    const body = { model, messages, temperature: 0.05, max_tokens: options?.maxTokens ?? 2400 } as Record<string, unknown>;
     if (options?.jsonMode) body.response_format = { type: "json_object" };
     const res = await postJson(url, body, { Authorization: `Bearer ${groqKey}` });
     if ("error" in res) return { error: res.error, detail: res.detail, status: res.status };
@@ -33,7 +33,7 @@ export async function callLlm(messages: GroqMessage[], options?: { model?: strin
     if (!openaiKey) return { error: "OPENAI_API_KEY missing.", status: 500 };
     const url = process.env.OPENAI_API_URL || "https://api.openai.com/v1/chat/completions";
     const model = options?.model || process.env.OPENAI_MODEL || "gpt-4o-mini";
-    const body: any = { model, messages, temperature: 0.05, max_tokens: options?.maxTokens ?? 2400 };
+    const body = { model, messages, temperature: 0.05, max_tokens: options?.maxTokens ?? 2400 } as Record<string, unknown>;
     const res = await postJson(url, body, { Authorization: `Bearer ${openaiKey}` });
     if ("error" in res) return { error: res.error, detail: res.detail, status: res.status };
     return { content: res.data.choices?.[0]?.message?.content ?? "" };
@@ -45,7 +45,7 @@ export async function callLlm(messages: GroqMessage[], options?: { model?: strin
     const model = options?.model || process.env.ANTHROPIC_MODEL || "claude-2.1";
     // Anthropic expects a single prompt; convert messages into a prompt
     const prompt = messages.map((m) => `${m.role.toUpperCase()}:\n${m.content}`).join("\n\n");
-    const body: any = { model, prompt, max_tokens_to_sample: options?.maxTokens ?? 2400, temperature: 0.05 };
+    const body = { model, prompt, max_tokens_to_sample: options?.maxTokens ?? 2400, temperature: 0.05 } as Record<string, unknown>;
     const res = await postJson(url, body, { Authorization: `Bearer ${anthropicKey}` });
     if ("error" in res) return { error: res.error, detail: res.detail, status: res.status };
     return { content: res.data?.completion ?? res.data?.choices?.[0]?.text ?? "" };

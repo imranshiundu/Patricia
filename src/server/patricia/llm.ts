@@ -1,3 +1,7 @@
+import https from "https";
+import http from "http";
+import { URL } from "url";
+
 export type PatriciaLLMRole = "system" | "user" | "assistant";
 
 export type PatriciaLLMMessage = {
@@ -71,11 +75,45 @@ export function getPatriciaLLMStatus(): PatriciaLLMStatus {
   };
 }
 
-async function postJson(url: string, headers: Record<string, string>, body: unknown) {
-  const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) });
-  const text = await response.text();
-  if (!response.ok) throw new Error(`LLM request failed (${response.status}): ${text.slice(0, 1200)}`);
-  return text ? JSON.parse(text) : {};
+async function postJson(url: string, headers: Record<string, string>, body: unknown): Promise<Record<string, unknown>> {
+  const parsed = new URL(url);
+  const payload = JSON.stringify(body);
+  const isHttps = parsed.protocol === "https:";
+  const lib = isHttps ? https : http;
+
+  return new Promise((resolve, reject) => {
+    const req = lib.request(
+      {
+        hostname: parsed.hostname,
+        port: parsed.port || (isHttps ? 443 : 80),
+        path: parsed.pathname + parsed.search,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(payload),
+          ...headers,
+        },
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (chunk) => { data += chunk; });
+        res.on("end", () => {
+          if (!res.statusCode || res.statusCode >= 400) {
+            reject(new Error(`LLM request failed (${res.statusCode}): ${data.slice(0, 1200)}`));
+            return;
+          }
+          try {
+            resolve(data ? JSON.parse(data) : {});
+          } catch {
+            reject(new Error(`LLM response parse error: ${data.slice(0, 400)}`));
+          }
+        });
+      }
+    );
+    req.on("error", reject);
+    req.write(payload);
+    req.end();
+  });
 }
 
 async function callOpenAICompatible(args: {
@@ -89,13 +127,13 @@ async function callOpenAICompatible(args: {
   const data = await postJson(`${args.baseUrl.replace(/\/$/, "")}/chat/completions`, args.apiKey ? { Authorization: `Bearer ${args.apiKey}` } : {}, {
     model: args.model,
     messages: compactMessages(args.messages),
-    temperature: args.options.temperature ?? 0.05,
-    max_tokens: args.options.maxTokens ?? 2400,
+    temperature: args.options.temperature ?? 0.1,
+    max_tokens: args.options.maxTokens ?? 8192,
     ...(args.options.jsonMode ? { response_format: { type: "json_object" } } : {}),
   });
 
   return {
-    content: data.choices?.[0]?.message?.content || "",
+    content: (data.choices as Array<{message: {content: string}}>)?.[0]?.message?.content || "",
     provider: args.provider,
     model: args.model,
   } satisfies PatriciaLLMResult;

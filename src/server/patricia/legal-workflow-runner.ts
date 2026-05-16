@@ -1,8 +1,8 @@
 import { buildPatriciaSkillRunPlan } from "@/lib/patricia-skills/registry";
-import { buildClaudeForLegalRuntimePrompt, claudeForLegalSkillPath, loadClaudeForLegalSkill } from "@/lib/claude-for-legal-adapter";
+import { buildPatriciaBrainRuntimePrompt, patriciaBrainSkillPath, loadPatriciaBrainSkill } from "@/lib/patricia-brain-adapter";
 import { callPatriciaLLM } from "@/server/patricia/llm";
 
-const MAX_CONTEXT_CHARS = 80_000;
+const MAX_CONTEXT_CHARS = 400_000;
 
 type LegalSource = {
   title: string;
@@ -27,27 +27,21 @@ export type PatriciaLegalWorkflowRequest = {
   model?: string;
 };
 
-function wantsDeepAnswer(question: string) {
-  return /full|detailed|comprehensive|brief|report|memo|explain|decode|reasoning|orders|facts|issues|review|draft|triage|assessment|contract|agreement|policy/i.test(question);
-}
-
 function compactText(input: string, max = MAX_CONTEXT_CHARS) {
   return input.replace(/\s+/g, " ").trim().slice(0, max);
 }
 
 function buildSystemPrompt(args: { sourcePath: string; providerInstruction: string }) {
   return [
-    "Patricia is a server-backed legal workflow system.",
+    "Patricia is a server-backed intelligent assistant.",
     "Patricia manages product shell, chat UI, document intake, storage, provider routing, and orchestration.",
-    "Claude-for-legal source files provide the legal workflow brain.",
+    "Patricia Brain source files provide the workflow intelligence.",
     "All LLM/API calls happen on the Patricia backend/server layer only.",
     "The browser must never own provider API keys or call LLM vendors directly.",
-    "Follow the loaded claude-for-legal source file carefully.",
-    "Do not use retired Patricia legal behavior or old hardcoded legal routes.",
+    "Follow the loaded Patricia Brain source file carefully. However, you are flexible and can handle general questions, data analysis, accounting, or student queries. Do not restrict yourself purely to rigid legal constraints if the user asks for something else.",
     "Do not claim to have used external connectors or third-party systems unless connector output is explicitly provided in the request.",
-    "If the workflow needs an unavailable connector, say exactly what connector/input is missing and continue only as a safe draft/intake workflow.",
-    "Every output is a draft for qualified review.",
-    `Loaded claude-for-legal source path: ${args.sourcePath}.`,
+    "If the workflow needs an unavailable connector, say exactly what connector/input is missing.",
+    `Loaded Patricia Brain source path: ${args.sourcePath}.`,
     args.providerInstruction,
   ].join("\n");
 }
@@ -55,10 +49,9 @@ function buildSystemPrompt(args: { sourcePath: string; providerInstruction: stri
 function buildSources(args: { documentTitle?: string; documentText?: string; sourcePath: string; command: string; sourceType?: string }): LegalSource[] {
   const sources: LegalSource[] = [
     {
-      title: `claude-for-legal ${args.command} ${args.sourceType || "source"}`,
-      url: `https://github.com/anthropics/claude-for-legal/blob/main/${args.sourcePath}`,
+      title: `Patricia Brain ${args.command} ${args.sourceType || "source"}`,
       authority: "workflow-source",
-      sourceName: "anthropics/claude-for-legal",
+      sourceName: "Patricia Brain",
       documentType: args.sourceType || "workflow-source",
     },
   ];
@@ -113,15 +106,15 @@ export async function runPatriciaLegalWorkflow(body: PatriciaLegalWorkflowReques
     previousMessages,
   });
 
-  const sourceText = await loadClaudeForLegalSkill(skillPlan.selectedCommand);
-  const sourcePath = claudeForLegalSkillPath(skillPlan.selectedCommand);
-  const hasLoadedSource = !sourceText.includes("Source file missing at");
+  const sourceText = await loadPatriciaBrainSkill(skillPlan.selectedCommand);
+  const sourcePath = patriciaBrainSkillPath(skillPlan.selectedCommand);
+  const hasLoadedSource = !sourceText.includes("Brain resource missing at");
   const hasDocument = Boolean(suppliedDocumentText.trim());
   const sources = buildSources({ documentTitle: suppliedDocumentTitle, documentText: suppliedDocumentText, sourcePath, command: skillPlan.selectedCommand.command, sourceType: skillPlan.selectedCommand.sourceType });
   const trustScore = scoreRun({ hasSource: hasLoadedSource, hasDocument, missingInputs: skillPlan.missingInputs, requiresDocument: skillPlan.selectedCommand.requiresDocument });
   const confidence = confidenceFromScore(trustScore);
 
-  const runtimePrompt = buildClaudeForLegalRuntimePrompt({
+  const runtimePrompt = buildPatriciaBrainRuntimePrompt({
     command: skillPlan.selectedCommand,
     skillMarkdown: sourceText,
     practiceProfile,
@@ -145,19 +138,19 @@ export async function runPatriciaLegalWorkflow(body: PatriciaLegalWorkflowReques
   const draft = await callPatriciaLLM([
     { role: "system", content: buildSystemPrompt({ sourcePath, providerInstruction }) },
     { role: "user", content: runtimePrompt },
-  ], { model, maxTokens: wantsDeepAnswer(originalQuestion) || hasDocument ? 6200 : 3600, temperature: 0.05 });
+  ], { model, maxTokens: 8192, temperature: 0.1 });
 
   const verification = await callPatriciaLLM([
-    { role: "system", content: "You are a workflow QA checker. Do not add new facts. Clean the answer, preserve the claude-for-legal workflow, flag unsupported claims, and keep the qualified-review warning." },
+    { role: "system", content: "You are a workflow QA checker. Do not add new facts. Clean the answer, preserve the workflow, flag unsupported claims. You are flexible and can process any text length or domain." },
     { role: "user", content: `COMMAND: ${skillPlan.selectedCommand.command}\nSOURCE PATH: ${sourcePath}\nTRUST SCORE: ${trustScore}\nMISSING INPUTS: ${skillPlan.missingInputs.join(", ") || "none"}\n\nDRAFT:\n${draft.content}` },
-  ], { model, maxTokens: wantsDeepAnswer(originalQuestion) || hasDocument ? 4200 : 2600, temperature: 0.02 });
+  ], { model, maxTokens: 8192, temperature: 0.1 });
 
   return {
     content: verification.content || draft.content,
     route: {
       task: skillPlan.selectedCommand.command,
       documentType: skillPlan.selectedCommand.plugin,
-      outputMode: "claude-for-legal-source",
+      outputMode: "patricia-brain-source",
       needsResearch: skillPlan.selectedCommand.requiresConnector || false,
       needsLocalDocument: skillPlan.selectedCommand.requiresDocument,
     },
@@ -182,11 +175,11 @@ export async function runPatriciaLegalWorkflow(body: PatriciaLegalWorkflowReques
       mode: "server-ready",
       runtime: "nodejs",
       orchestration: "patricia-server",
-      workflowBrain: "anthropics/claude-for-legal",
+      workflowBrain: "Patricia Brain",
       llmCalls: "server-only",
     },
-    answerMode: "claude-for-legal",
-    sourceQuality: hasDocument ? "claude-for-legal-source-plus-user-document" : "claude-for-legal-source-only",
+    answerMode: "patricia-brain",
+    sourceQuality: hasDocument ? "patricia-brain-source-plus-user-document" : "patricia-brain-source-only",
     trustScore,
     confidence,
     releaseSafe: trustScore >= 82 && skillPlan.missingInputs.length === 0,
@@ -197,18 +190,19 @@ export async function runPatriciaLegalWorkflow(body: PatriciaLegalWorkflowReques
       missingInputs: skillPlan.missingInputs,
       missingConnectors: skillPlan.selectedCommand.requiresConnector ? ["required connector output not supplied"] : [],
     },
-    extractionKind: "claude-for-legal-source",
+    extractionKind: "patricia-brain-source",
     extraction: null,
     evidenceLedger: skillPlan.missingInputs.map((missing, index) => ({
       id: `missing-${index + 1}`,
       claim: `Missing input: ${missing}`,
-      support: "Required by the selected claude-for-legal workflow before full completion.",
+      support: "Required by the selected Patricia Brain workflow before full completion.",
       source: "workflow intake",
       confidence: "high",
       kind: "workflow-gap",
-      authority: "claude-for-legal source",
+      authority: "Patricia Brain source",
       risk: "high",
     })),
     sources,
   };
 }
+

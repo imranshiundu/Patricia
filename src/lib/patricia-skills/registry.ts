@@ -1,6 +1,7 @@
 import { PatriciaSkillCommand, PatriciaSkillRunContext, PatriciaSkillRunPlan, WORKFLOW_REVIEW_WARNING } from "./types";
 
 const RAW_COMMANDS = `
+general-assistant|auto|Patricia AI Assistant|Auto-Detect|triage|0|0|0
 commercial-legal|review|Vendor Agreement Reviewer|Review contract|review|1|1|0
 commercial-legal|amendment-history|Amendment Tracer|Trace amendments|review|1|0|0
 commercial-legal|escalation-flagger|Escalation Router|Route escalation|triage|1|1|0
@@ -102,13 +103,13 @@ function makeCommand(row: string): PatriciaSkillCommand {
     stage: stage as PatriciaSkillCommand["stage"],
     sourceType: isAgent ? "agent" : "skill",
     sourcePath: isAgent ? `${plugin}/agents/${slug}.md` : `${plugin}/skills/${slug}/SKILL.md`,
-    shortDescription: `${agent} workflow from claude-for-legal.`,
+    shortDescription: `${agent} workflow from Patricia Brain.`,
     userButton,
     requiresDocument: needsDocument === "1",
     requiresPracticeProfile: needsProfile === "1",
     requiresConnector: needsConnector === "1",
     risk: stage === "learning" ? "medium" : "review-required",
-    promptFrame: `Run the Claude-for-legal ${agent} workflow from its source file.`,
+    promptFrame: `Run the Patricia Brain ${agent} workflow from its source file.`,
     expectedInputs: ["task description", "facts", "source document where applicable", "practice profile where applicable", "connector output where applicable"],
     outputChecklist: ["workflow used", "facts reviewed", "analysis or draft", "missing inputs", "review gate", "next actions"],
     reviewGate: WORKFLOW_REVIEW_WARNING,
@@ -120,7 +121,7 @@ export const PATRICIA_VISIBLE_COMMANDS = PATRICIA_LEGAL_COMMANDS.filter((command
 export const PATRICIA_SCHEDULED_COMMANDS = PATRICIA_LEGAL_COMMANDS.filter((command) => command.stage === "scheduled");
 export const PATRICIA_PLUGIN_GROUPS = Array.from(new Set(PATRICIA_LEGAL_COMMANDS.map((command) => command.plugin)));
 
-const DEFAULT_COMMAND = PATRICIA_LEGAL_COMMANDS.find((command) => command.command === "/commercial-legal:review") || PATRICIA_LEGAL_COMMANDS[0];
+const DEFAULT_COMMAND = PATRICIA_LEGAL_COMMANDS.find((command) => command.command === "/general-assistant:auto") || PATRICIA_LEGAL_COMMANDS[0];
 
 function normalize(value: string) {
   return value.toLowerCase().replace(/\s+/g, " ").trim();
@@ -157,7 +158,7 @@ export function buildPatriciaSkillRunPlan(context: PatriciaSkillRunContext): Pat
     normalizedQuestion,
     intakeChecklist,
     missingInputs,
-    systemAddendum: `Claude-for-legal source mode: ${selectedCommand.sourcePath}`,
+    systemAddendum: `Patricia Brain source mode: ${selectedCommand.sourcePath}`,
     userPromptAddendum: `Run ${selectedCommand.command}. Outputs: ${selectedCommand.outputChecklist.join("; ")}`,
     shouldAskForDocument: selectedCommand.requiresDocument && !hasDocument,
     shouldAskForPracticeProfile: selectedCommand.requiresPracticeProfile && !hasPracticeProfile,

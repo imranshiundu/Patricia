@@ -70,4 +70,4 @@ export type PatriciaSkillRunPlan = {
 };
 
 export const WORKFLOW_REVIEW_WARNING =
-  "Every output is a draft for review. Patricia manages the shell; Claude-for-legal provides the workflow source.";
+  "Every output is a draft for review. Patricia manages the shell; Patricia Brain provides the workflow source.";
